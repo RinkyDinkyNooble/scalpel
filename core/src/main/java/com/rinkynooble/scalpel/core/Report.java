@@ -108,11 +108,11 @@ public final class Report {
         out.append("Scalpel report\n==============\n");
         out.append("Version:  ").append(core.versionLabel()).append('\n');
         out.append("Side:     ").append(core.side()).append('\n');
-        out.append("Written:  ").append(LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)).append('\n');
+        out.append("Written:  ").append(LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))).append('\n');
         if (core.settings().dryRun()) {
             out.append("Mode:     DRY RUN, nothing was cut. Everything below is what would happen.\n");
         }
-        out.append("Settings: ").append(core.settings()).append('\n');
+        out.append("Settings: ").append(describe(core.settings())).append('\n');
         out.append("Rules hash: ").append(core.hash().full()).append('\n');
         for (Map.Entry<String, String> entry : core.hash().perFile().entrySet()) {
             out.append("  ").append(entry.getValue()).append("  ").append(entry.getKey()).append('\n');
@@ -168,7 +168,7 @@ public final class Report {
             for (ContentType type : ContentType.REGISTRY_TYPES) {
                 long redacted = cuts.stream().filter(c -> c.type() == type && c.decision().action() == Decision.Action.REDACT).count();
                 long removed = cuts.stream().filter(c -> c.type() == type && c.decision().action() == Decision.Action.REMOVE).count();
-                out.append(pad(type.keyword() + "s:", 11)).append(redacted).append(" redacted, ").append(removed).append(" removed\n");
+                out.append(pad(plural(type) + ":", 11)).append(redacted).append(" redacted, ").append(removed).append(" removed\n");
             }
             if (dryRun) {
                 out.append("(dry run: would be)\n");
@@ -242,6 +242,20 @@ public final class Report {
             out.append("Stopped at cascadeDepth = ").append(cascadeDepth).append(".\n");
         }
         out.append('\n');
+    }
+
+    public static String plural(ContentType type) {
+        return switch (type) {
+            case ENTITY -> "entities";
+            case LOOT -> "loot tables";
+            default -> type.keyword() + "s";
+        };
+    }
+
+    private static String describe(Settings s) {
+        return "dryRun=" + s.dryRun() + ", logFile=" + s.logFile() + ", allowRemovingVanilla=" + s.allowRemovingVanilla()
+                + ", protectCriticalIds=" + s.protectCriticalIds() + ", ingredientMode=" + s.ingredientMode().keyword()
+                + ", cascadeDepth=" + s.cascadeDepth();
     }
 
     private static String namespace(String id) {

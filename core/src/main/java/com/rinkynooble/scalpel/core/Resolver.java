@@ -129,13 +129,30 @@ public final class Resolver {
             }
         }
         if (spawnsEntity != null) {
+            // Items register before entity types, so the entity may not have been decided yet.
             Decision entity = cut.get(ContentType.ENTITY).get(spawnsEntity);
+            if (entity == null) {
+                Decision pending = peek(ContentType.ENTITY, spawnsEntity);
+                entity = pending.isCut() ? pending : null;
+            }
             if (entity != null) {
                 return guard(ContentType.ITEM, id, entity.action() == Action.REDACT ? Verb.REDACT : Verb.REMOVE,
                         entity.rule(), entity.matched(), "linked: spawn egg for " + spawnsEntity);
             }
         }
         return own;
+    }
+
+    /**
+     * A cut that comes from a link the port found itself (for example a block item that places the shared
+     * {@code scalpel:removed} block). Protection and the vanilla guard still apply.
+     */
+    public Decision decideLinked(ContentType type, String id, Action action, String note) {
+        Decision own = decide(type, id);
+        if (own.action() != Action.NONE) {
+            return own;
+        }
+        return guard(type, id, action == Action.REDACT ? Verb.REDACT : Verb.REMOVE, null, List.of(), note);
     }
 
     public Decision decideEntity(String id) {

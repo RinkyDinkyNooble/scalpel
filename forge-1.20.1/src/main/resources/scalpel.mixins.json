@@ -5,7 +5,18 @@
   "plugin": "com.rinkynooble.scalpel.forge.mixin.ScalpelMixinPlugin",
   "compatibilityLevel": "JAVA_17",
   "refmap": "scalpel.refmap.json",
-  "mixins": [],
+  "mixins": [
+    "BlocksMixin",
+    "EntityTypeMixin",
+    "ForgeRegistryMixin",
+    "ForgeSpawnEggItemAccessor",
+    "ItemsMixin",
+    "MappedRegistryAccessor",
+    "RegisterEventMixin",
+    "RegistryObjectMixin",
+    "SpawnEggItemAccessor",
+    "StandingAndWallBlockItemAccessor"
+  ],
   "client": [],
   "injectors": {
     "defaultRequire": 1

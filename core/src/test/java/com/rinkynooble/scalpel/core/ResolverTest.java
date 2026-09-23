@@ -107,6 +107,14 @@ class ResolverTest {
     }
 
     @Test
+    void spawnEggFollowsEntityDecidedLater() {
+        // Forge registers items before entity types.
+        Resolver r = resolver("remove entity mobs:blob");
+        assertEquals(Action.REMOVE, r.decideItem("mobs:blob_spawn_egg", List.of(), "mobs:blob").action());
+        assertEquals(Action.NONE, r.decideItem("mobs:other_egg", List.of(), "mobs:other").action());
+    }
+
+    @Test
     void linkedVanillaItemIsStillGuarded() {
         Settings allow = new Settings(false, true, true, true, RecipeMode.DROP, 3);
         Resolver r = resolver(allow, "remove block minecraft:dead_bush");
