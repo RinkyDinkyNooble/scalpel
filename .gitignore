@@ -1,0 +1,26 @@
+# Gradle
+.gradle/
+build/
+
+# Forge dev runs
+run/
+
+# IDEs
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.classpath
+.project
+.settings/
+bin/
+out/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Private notes, plans and test rigs
+/research

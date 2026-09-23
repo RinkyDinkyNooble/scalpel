@@ -1,0 +1,13 @@
+{
+  "required": true,
+  "minVersion": "0.8.5",
+  "package": "com.rinkynooble.scalpel.forge.mixin",
+  "plugin": "com.rinkynooble.scalpel.forge.mixin.ScalpelMixinPlugin",
+  "compatibilityLevel": "JAVA_17",
+  "refmap": "scalpel.refmap.json",
+  "mixins": [],
+  "client": [],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

@@ -1,0 +1,19 @@
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+        maven { url = 'https://maven.minecraftforge.net/' }
+        maven { url = 'https://repo.spongepowered.org/repository/maven-public/' }
+    }
+}
+
+plugins {
+    id 'org.gradle.toolchains.foojay-resolver-convention' version '0.8.0'
+}
+
+rootProject.name = 'scalpel'
+
+// Loader-independent logic. Must never import Minecraft or loader classes.
+include 'core'
+
+// One folder per loader + Minecraft version. Each one compiles core's sources into its own jar.
+include 'forge-1.20.1'

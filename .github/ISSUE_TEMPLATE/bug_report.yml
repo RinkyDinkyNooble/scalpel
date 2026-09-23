@@ -1,0 +1,39 @@
+name: Bug report
+description: Something broke, crashed, or didn't get cut when it should have.
+labels: [bug]
+body:
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: Scalpel, Minecraft and Forge versions.
+      placeholder: Scalpel 0.1.0, Minecraft 1.20.1, Forge 47.4.10
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you expected, and what you got instead.
+    validations:
+      required: true
+  - type: textarea
+    id: rules
+    attributes:
+      label: Rules
+      description: The rule lines involved. Paste the whole rules file if you're not sure which lines matter.
+      render: text
+  - type: textarea
+    id: logs
+    attributes:
+      label: Report and logs
+      description: |
+        Attach `logs/scalpel/report.txt` and `logs/scalpel.log`.
+        If the game crashed, attach the crash report or `logs/latest.log` as well.
+    validations:
+      required: true
+  - type: textarea
+    id: mods
+    attributes:
+      label: Other mods
+      description: The mods that matter here, or the whole mod list if it's a big pack.
