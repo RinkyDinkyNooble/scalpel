@@ -6,16 +6,21 @@
   "compatibilityLevel": "JAVA_17",
   "refmap": "scalpel.refmap.json",
   "mixins": [
-    "BlocksMixin",
-    "EntityTypeMixin",
     "ForgeRegistryMixin",
     "ForgeSpawnEggItemAccessor",
-    "ItemsMixin",
+    "IngredientAccessor",
     "MappedRegistryAccessor",
+    "NbtUtilsMixin",
     "RegisterEventMixin",
+    "RegistryDataLoaderMixin",
     "RegistryObjectMixin",
+    "SimpleJsonResourceReloadListenerMixin",
     "SpawnEggItemAccessor",
-    "StandingAndWallBlockItemAccessor"
+    "StandingAndWallBlockItemAccessor",
+    "StructureTemplateManagerMixin",
+    "StructureTemplateMixin",
+    "TagValueAccessor",
+    "TagLoaderMixin"
   ],
   "client": [],
   "injectors": {

@@ -34,7 +34,7 @@ public final class Report {
     private final Collection<CutEntry> cuts = new ConcurrentLinkedQueue<>();
     private final Collection<CutEntry> protectedHits = new ConcurrentLinkedQueue<>();
     private final Set<String> warnings = Collections.synchronizedSet(new LinkedHashSet<>());
-    private final Collection<Change> changes = new ConcurrentLinkedQueue<>();
+    private final Set<Change> changes = java.util.concurrent.ConcurrentHashMap.newKeySet();
     private final Set<ContentType> evaluated = Collections.synchronizedSet(EnumSet.noneOf(ContentType.class));
     private volatile List<Set<String>> cascade = List.of();
     private volatile int cascadeDepth;
@@ -60,9 +60,13 @@ public final class Report {
         evaluated.addAll(types);
     }
 
-    /** Called before data reloads: data changes are rebuilt from scratch. */
+    /**
+     * Called before data reloads: data changes are rebuilt from scratch. Changes that only happen once
+     * (worldgen, structures, trades, creative tabs) are kept.
+     */
     public void resetData() {
-        changes.clear();
+        changes.removeIf(c -> !(c.category().startsWith("worldgen") || c.category().startsWith("structure")
+                || c.category().startsWith("trade") || c.category().startsWith("creative tab")));
         cascade = List.of();
     }
 

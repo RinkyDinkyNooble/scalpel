@@ -12,6 +12,7 @@ import com.rinkynooble.scalpel.forge.content.RedactedBlock;
 import com.rinkynooble.scalpel.forge.content.RedactedBlockItem;
 import com.rinkynooble.scalpel.forge.content.RedactedEntity;
 import com.rinkynooble.scalpel.forge.content.RedactedItem;
+import com.rinkynooble.scalpel.forge.content.RemovedItem;
 import com.rinkynooble.scalpel.forge.mixin.ForgeSpawnEggItemAccessor;
 import com.rinkynooble.scalpel.forge.mixin.MappedRegistryAccessor;
 import com.rinkynooble.scalpel.forge.mixin.SpawnEggItemAccessor;
@@ -61,7 +62,6 @@ public final class RegistryCutter {
     private static final Set<String> processed = ConcurrentHashMap.newKeySet();
     /** Objects that were built and then refused, so later links (a block item's block) can still be named. */
     private static final Map<Object, String> refused = Collections.synchronizedMap(new IdentityHashMap<>());
-    private static final Map<Object, Object> placeholders = Collections.synchronizedMap(new IdentityHashMap<>());
     /** Unregistered stand-ins for removed ids, handed to mod code that still asks for them. Keyed by type + id. */
     private static final Map<String, Object> ghosts = new ConcurrentHashMap<>();
 
@@ -164,6 +164,14 @@ public final class RegistryCutter {
         if (!decision.isCut()) {
             return null;
         }
+        if (decision.action() == Action.REDACT && name.getNamespace().equals("minecraft")) {
+            // Vanilla code relies on its own classes and block states (beds, for example), so vanilla content is
+            // hidden and filtered out of all data, but the object itself stays registered.
+            decision = new Decision(Action.REDACT, decision.rule(), decision.matched(),
+                    (decision.note() == null ? "" : decision.note() + "; ") + "vanilla: hidden, not replaced");
+            record(core, type, id, modId, decision);
+            return null;
+        }
         record(core, type, id, modId, decision);
         if (!core.applies()) {
             return null;
@@ -174,9 +182,7 @@ public final class RegistryCutter {
             makeGhost(registryKey, type, name);
             return Cut.SKIP;
         }
-        Object placeholder = placeholder(type, name, value);
-        placeholders.put(value, placeholder);
-        return new Cut(false, placeholder);
+        return new Cut(false, placeholder(type, name, value));
     }
 
     /**
@@ -198,20 +204,27 @@ public final class RegistryCutter {
             return null;
         }
         ContentType type = typeOf(ResourceKey.createRegistryKey(registry));
-        return type == null ? null : ghosts.get(key(type, name.toString()));
+        if (type == null) {
+            return null;
+        }
+        Object ghost = ghosts.get(key(type, name.toString()));
+        if (ghost != null && type == ContentType.ITEM) {
+            // An item must be registered to go into an ItemStack, so removed items share one hidden registered item.
+            return RemovedItem.getOrNull();
+        }
+        return ghost;
     }
 
-    /** True for placeholders and ghosts. */
-    public static boolean isPlaceholder(Object value) {
-        return value instanceof Redacted || (value instanceof EntityType<?> && refused.containsKey(value));
+    /** The id an item stands for: its original id for placeholders and ghosts, else its registry key. */
+    public static String itemId(net.minecraft.world.item.Item item) {
+        String id = idOf(Registries.ITEM, item);
+        return id == null ? "minecraft:air" : id;
     }
 
-    /**
-     * The placeholder registered instead of {@code original}, or null. Vanilla's registration helpers return
-     * this so its static fields ({@code Blocks.DEAD_BUSH}, ...) point at what is actually registered.
-     */
-    public static Object placeholderFor(Object original) {
-        return placeholders.isEmpty() ? null : placeholders.get(original);
+    /** True for items that were cut: placeholders, ghosts, refused originals and hidden vanilla items. */
+    public static boolean isCutItem(net.minecraft.world.item.Item item) {
+        String id = itemId(item);
+        return id.equals(RemovedItem.ID) || Scalpel.core().resolver().isCut(ContentType.ITEM, id);
     }
 
     private static void record(ScalpelCore core, ContentType type, String id, String modId, Decision decision) {
@@ -219,9 +232,6 @@ public final class RegistryCutter {
         core.report().cut(type, id, modId, decision);
         core.log().detail((core.applies() ? "" : "[dry run] ") + decision.action().name().toLowerCase(java.util.Locale.ROOT) + " "
                 + type.keyword() + " " + id + " (mod " + modId + ")" + ruleSuffix(decision));
-        if (decision.action() == Action.REMOVE && type == ContentType.ENTITY) {
-            core.log().detail("  note: if " + modId + " still looks up entity " + id + " during startup, it will crash. Use redact if it does.");
-        }
     }
 
     private static String ruleSuffix(Decision decision) {
