@@ -4,7 +4,13 @@ import com.rinkynooble.scalpel.core.ContentType;
 import com.rinkynooble.scalpel.core.Decision;
 import com.rinkynooble.scalpel.core.ScalpelCore;
 import com.rinkynooble.scalpel.core.rules.Rule;
+import com.rinkynooble.scalpel.forge.client.ScalpelClient;
+import com.rinkynooble.scalpel.forge.command.ScalpelCommand;
 import com.rinkynooble.scalpel.forge.content.RemovedItem;
+import com.rinkynooble.scalpel.forge.net.Handshake;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.event.RegisterCommandsEvent;
+import net.minecraftforge.fml.DistExecutor;
 import com.rinkynooble.scalpel.forge.data.ServerData;
 import com.rinkynooble.scalpel.forge.data.TabsAndTrades;
 import net.minecraftforge.common.MinecraftForge;
@@ -27,7 +33,9 @@ public final class ScalpelForge {
         IEventBus forgeBus = MinecraftForge.EVENT_BUS;
         ServerData.register(forgeBus);
         TabsAndTrades.register(modBus, forgeBus);
-        Scalpel.core();
+        forgeBus.addListener((RegisterCommandsEvent event) -> ScalpelCommand.register(event.getDispatcher()));
+        Handshake.register();
+        DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> ScalpelClient.init(modBus));
     }
 
     /** Registration is over by now: summarise it and write the first report. */

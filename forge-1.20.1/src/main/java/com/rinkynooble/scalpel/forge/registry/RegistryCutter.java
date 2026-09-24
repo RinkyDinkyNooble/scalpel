@@ -61,6 +61,7 @@ public final class RegistryCutter {
 
     private static final Set<String> processed = ConcurrentHashMap.newKeySet();
     /** Objects that were built and then refused, so later links (a block item's block) can still be named. */
+    private static final Set<Object> placeholderEntityTypes = Collections.newSetFromMap(Collections.synchronizedMap(new IdentityHashMap<>()));
     private static final Map<Object, String> refused = Collections.synchronizedMap(new IdentityHashMap<>());
     /** Unregistered stand-ins for removed ids, handed to mod code that still asks for them. Keyed by type + id. */
     private static final Map<String, Object> ghosts = new ConcurrentHashMap<>();
@@ -215,6 +216,11 @@ public final class RegistryCutter {
         return ghost;
     }
 
+    /** True for entity types Scalpel created as placeholders. */
+    public static boolean isPlaceholderEntityType(Object type) {
+        return placeholderEntityTypes.contains(type);
+    }
+
     /** The id an item stands for: its original id for placeholders and ghosts, else its registry key. */
     public static String itemId(net.minecraft.world.item.Item item) {
         String id = idOf(Registries.ITEM, item);
@@ -247,7 +253,11 @@ public final class RegistryCutter {
                 RedactedBlock block = redactedBlockFor(name, original);
                 yield block != null ? new RedactedBlockItem(block, name) : new RedactedItem(name);
             }
-            case ENTITY -> RedactedEntity.createType(name);
+            case ENTITY -> {
+                EntityType<RedactedEntity> placeholder = RedactedEntity.createType(name);
+                placeholderEntityTypes.add(placeholder);
+                yield placeholder;
+            }
             default -> throw new IllegalArgumentException(type.toString());
         };
     }

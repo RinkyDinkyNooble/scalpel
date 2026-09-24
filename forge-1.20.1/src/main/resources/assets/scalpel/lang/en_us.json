@@ -3,5 +3,7 @@
   "item.scalpel.redacted": "Redacted",
   "entity.scalpel.redacted": "Redacted",
   "tooltip.scalpel.original": "Was %s",
-  "item.scalpel.removed": "Removed"
+  "item.scalpel.removed": "Removed",
+  "tooltip.scalpel.removed": "Stands in for removed items",
+  "tooltip.scalpel.hidden": "Hidden by Scalpel"
 }

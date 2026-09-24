@@ -7,6 +7,7 @@ import com.rinkynooble.scalpel.core.Resolver;
 import com.rinkynooble.scalpel.core.ScalpelCore;
 import com.rinkynooble.scalpel.core.rules.Rule;
 import com.rinkynooble.scalpel.forge.Scalpel;
+import com.rinkynooble.scalpel.forge.command.IdSuggestions;
 import com.rinkynooble.scalpel.core.RecipeMode;
 import com.rinkynooble.scalpel.forge.mixin.IngredientAccessor;
 import com.rinkynooble.scalpel.forge.mixin.TagValueAccessor;
@@ -246,6 +247,7 @@ public final class ServerData {
             return;
         }
         ScalpelCore core = Scalpel.core();
+        IdSuggestions.dataChanged();
         MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
         if (server != null && core.settings().cascadeDepth() > 0 && !DataFilter.lostProducers().isEmpty()) {
             core.report().cascade(cascade(core, server), core.settings().cascadeDepth());

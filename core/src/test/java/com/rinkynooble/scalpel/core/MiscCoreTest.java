@@ -49,6 +49,29 @@ class MiscCoreTest {
     }
 
     @Test
+    void idIndexStaysFastAtModpackScale() {
+        List<String> ids = new java.util.ArrayList<>();
+        for (int mod = 0; mod < 300; mod++) {
+            for (int item = 0; item < 250; item++) {
+                ids.add("mod" + mod + ":thing_" + item + "_block");
+            }
+        }
+        long buildStart = System.nanoTime();
+        IdIndex index = new IdIndex(ids);
+        long buildMs = (System.nanoTime() - buildStart) / 1_000_000;
+        assertEquals(75_000, index.size());
+
+        long start = System.nanoTime();
+        for (int i = 0; i < 1_000; i++) {
+            index.suggest("mod1" + (i % 10), 50);
+            index.suggest("thing_1" + (i % 10), 50);
+        }
+        long perLookupMicros = (System.nanoTime() - start) / 2_000 / 1_000;
+        assertTrue(perLookupMicros < 2_000, "suggestion took " + perLookupMicros + "us");
+        assertTrue(buildMs < 5_000, "index build took " + buildMs + "ms");
+    }
+
+    @Test
     void hashIgnoresCommentsButNotRulesOrSettings() {
         RulesLoader.RulesFile a = new RulesLoader.RulesFile("a.rules", RuleParser.parse("a.rules", List.of("# hello", "remove item x:*")).rules());
         RulesLoader.RulesFile b = new RulesLoader.RulesFile("a.rules", RuleParser.parse("a.rules", List.of("remove   item x:*   # different comment")).rules());
