@@ -31,6 +31,27 @@ class JsonScrubTest {
     }
 
     @Test
+    void readsBlockStateAndNbtStrings() {
+        assertEquals("deco:lamp", JsonScrub.asId("deco:lamp[lit=true]"));
+        assertEquals("minecraft:dead_bush", JsonScrub.asId("dead_bush[age=1]"));
+        assertEquals("deco:lamp", JsonScrub.asId("deco:lamp{Damage:3}"));
+        assertNull(JsonScrub.asId("[1,2]"));
+        assertTrue(JsonScrub.references(json("{'block':'deco:lamp[lit=true]'}"), CUT));
+    }
+
+    @Test
+    void replacesReferencesInPlace() {
+        JsonObject palette = json("{'palette':[{'char':'a','block':'deco:lamp[lit=true]'},{'char':'b','block':'minecraft:stone'}],"
+                + "'blocks':['deco:lamp','minecraft:dirt'],'mobs':{'mobs:blob':1}}");
+        Set<String> replaced = JsonScrub.replaceReferences(palette, CUT, "minecraft:air");
+        assertEquals(Set.of("deco:lamp"), replaced);
+        assertEquals("minecraft:air", palette.getAsJsonArray("palette").get(0).getAsJsonObject().get("block").getAsString());
+        assertEquals("minecraft:stone", palette.getAsJsonArray("palette").get(1).getAsJsonObject().get("block").getAsString());
+        assertEquals("minecraft:air", palette.getAsJsonArray("blocks").get(0).getAsString());
+        assertTrue(palette.getAsJsonObject("mobs").has("mobs:blob"), "keys are left for scrub()");
+    }
+
+    @Test
     void findsBareVanillaNames() {
         assertEquals(Set.of("minecraft:dead_bush"), JsonScrub.findReferences(json("{'item':'dead_bush'}"), CUT));
         assertFalse(JsonScrub.references(json("{'tag':'#deco:lamp'}"), CUT));

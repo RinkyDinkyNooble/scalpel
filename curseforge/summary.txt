@@ -1,0 +1,1 @@
+Cut unwanted items, blocks and entities out of your modpack before they load, along with their recipes, tags, loot and world generation.

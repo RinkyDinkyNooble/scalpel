@@ -213,7 +213,7 @@ public final class ScalpelCommand {
         Map<String, List<String>> found = new LinkedHashMap<>();
         liveRecipes(server, id, found);
         liveTags(id, found);
-        source.sendSuccess(() -> Component.literal("Looking for " + id + " in recipes, tags, loot, advancements and worldgen..."), false);
+        source.sendSuccess(() -> Component.literal("Looking for " + id + " in loaded recipes and tags, data files, and the config and script folders..."), false);
         ResourceManager resources = server.getResourceManager();
         CompletableFuture.supplyAsync(() -> scanFiles(resources, id), Util.backgroundExecutor())
                 .whenCompleteAsync((files, error) -> {
@@ -279,47 +279,123 @@ public final class ScalpelCommand {
     }
 
     /**
-     * Data files that mention the id, read from the packs as they are on disk (before Scalpel filters them).
-     * This is what matters when deciding whether an id can be removed rather than redacted.
+     * Data files that mention the id, read from the packs as they are on disk (before Scalpel filters them), plus the
+     * pack's own config and script folders. This is what matters when deciding whether an id can be removed rather
+     * than redacted: anything listed here will look the id up.
      */
     private static Map<String, List<String>> scanFiles(ResourceManager resources, String id) {
         Map<String, List<String>> found = new TreeMap<>();
-        String bare = id.startsWith("minecraft:") ? "\"" + id.substring("minecraft:".length()) + "\"" : null;
-        for (String folder : FIND_FOLDERS) {
-            Map<ResourceLocation, Resource> files = resources.listResources(folder, path -> path.getPath().endsWith(".json"));
-            for (Map.Entry<ResourceLocation, Resource> file : files.entrySet()) {
-                String text;
-                try (Reader reader = file.getValue().openAsReader()) {
-                    text = readAll(reader);
-                } catch (IOException e) {
-                    continue;
-                }
-                if (!text.contains(id) && (bare == null || !text.contains(bare))) {
-                    continue;
-                }
-                JsonElement json;
-                try {
-                    json = JsonParser.parseString(text);
-                } catch (RuntimeException e) {
-                    continue;
-                }
-                if (JsonScrub.references(json, id::equals)) {
-                    String path = file.getKey().getPath();
-                    String group = path.substring(0, path.lastIndexOf('/') < 0 ? path.length() : groupEnd(path, folder));
-                    found.computeIfAbsent(group + " files", k -> new ArrayList<>()).add(file.getKey().toString());
-                }
+        String bare = id.startsWith("minecraft:") ? "\"" + id.substring("minecraft:".length()) : null;
+        Map<ResourceLocation, Resource> files;
+        try {
+            files = resources.listResources("", path -> path.getPath().endsWith(".json"));
+        } catch (RuntimeException e) {
+            files = Map.of();
+        }
+        if (files.isEmpty()) {
+            files = new java.util.HashMap<>();
+            for (String folder : FIND_FOLDERS) {
+                files.putAll(resources.listResources(folder, path -> path.getPath().endsWith(".json")));
             }
         }
+        for (Map.Entry<ResourceLocation, Resource> file : files.entrySet()) {
+            String text;
+            try (Reader reader = file.getValue().openAsReader()) {
+                text = readAll(reader);
+            } catch (IOException e) {
+                continue;
+            }
+            if (!text.contains(id) && (bare == null || !text.contains(bare))) {
+                continue;
+            }
+            JsonElement json;
+            try {
+                json = JsonParser.parseString(text);
+            } catch (RuntimeException e) {
+                continue;
+            }
+            if (JsonScrub.references(json, id::equals)) {
+                found.computeIfAbsent("data: " + group(file.getKey().getPath()), k -> new ArrayList<>()).add(file.getKey().toString());
+            }
+        }
+        scanDisk(id, found);
         return found;
     }
 
-    /** {@code worldgen/configured_feature/x.json} groups as {@code worldgen/configured_feature}; others by top folder. */
-    private static int groupEnd(String path, String folder) {
-        if (folder.equals("worldgen") || folder.equals("forge") || folder.equals("tags")) {
-            int second = path.indexOf('/', folder.length() + 1);
-            return second < 0 ? folder.length() : second;
+    /** {@code worldgen/configured_feature/x.json} groups as {@code worldgen/configured_feature}, {@code recipes/x.json} as {@code recipes}. */
+    private static String group(String path) {
+        int first = path.indexOf('/');
+        if (first < 0) {
+            return path;
         }
-        return folder.length();
+        int second = path.indexOf('/', first + 1);
+        return second < 0 ? path.substring(0, first) : path.substring(0, second);
+    }
+
+    private static final Set<String> TEXT_EXTENSIONS = Set.of("json", "json5", "toml", "cfg", "txt", "js", "zs", "snbt", "properties", "yml", "yaml", "mcfunction");
+    private static final List<String> DISK_FOLDERS = List.of("config", "defaultconfigs", "kubejs", "scripts");
+
+    /** Config and script files in the game folder that mention the id, with line numbers. Scalpel's own folder is skipped. */
+    private static void scanDisk(String id, Map<String, List<String>> found) {
+        Path game = net.minecraftforge.fml.loading.FMLPaths.GAMEDIR.get();
+        Path own = Scalpel.core().rulesFolder();
+        for (String folder : DISK_FOLDERS) {
+            Path root = game.resolve(folder);
+            if (!Files.isDirectory(root)) {
+                continue;
+            }
+            try (java.util.stream.Stream<Path> walk = Files.walk(root)) {
+                walk.filter(Files::isRegularFile)
+                        .filter(p -> !p.startsWith(own))
+                        .filter(p -> TEXT_EXTENSIONS.contains(extension(p)))
+                        .forEach(p -> scanTextFile(game, p, id, found));
+            } catch (IOException | java.io.UncheckedIOException e) {
+                // A folder that cannot be walked is skipped.
+            }
+        }
+    }
+
+    private static void scanTextFile(Path game, Path file, String id, Map<String, List<String>> found) {
+        try {
+            if (Files.size(file) > 8_000_000) {
+                return;
+            }
+            List<String> lines = Files.readAllLines(file, StandardCharsets.UTF_8);
+            List<Integer> hits = new ArrayList<>();
+            for (int i = 0; i < lines.size(); i++) {
+                if (lines.get(i).contains(id)) {
+                    hits.add(i + 1);
+                }
+            }
+            if (!hits.isEmpty()) {
+                String rel = game.relativize(file).toString().replace(java.io.File.separatorChar, '/');
+                String top = rel.substring(0, rel.indexOf('/') < 0 ? rel.length() : rel.indexOf('/'));
+                found.computeIfAbsent(top + " files", k -> new ArrayList<>())
+                        .add(rel + " (line" + (hits.size() == 1 ? " " : "s ") + joinFirst(hits, 5) + ")");
+            }
+        } catch (IOException | RuntimeException e) {
+            // Unreadable or not UTF-8: skipped.
+        }
+    }
+
+    private static String joinFirst(List<Integer> numbers, int max) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < numbers.size() && i < max; i++) {
+            if (i > 0) {
+                sb.append(", ");
+            }
+            sb.append(numbers.get(i));
+        }
+        if (numbers.size() > max) {
+            sb.append(", ...");
+        }
+        return sb.toString();
+    }
+
+    private static String extension(Path file) {
+        String name = file.getFileName().toString();
+        int dot = name.lastIndexOf('.');
+        return dot < 0 ? "" : name.substring(dot + 1).toLowerCase(Locale.ROOT);
     }
 
     private static String readAll(Reader reader) throws IOException {

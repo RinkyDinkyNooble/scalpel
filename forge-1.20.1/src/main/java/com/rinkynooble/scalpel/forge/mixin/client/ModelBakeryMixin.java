@@ -6,7 +6,10 @@ import com.rinkynooble.scalpel.forge.client.ScalpelClient;
 import net.minecraft.client.resources.model.ModelBakery;
 import net.minecraft.resources.ResourceLocation;
 import org.objectweb.asm.Opcodes;
+import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Mutable;
+import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 
 import java.util.List;
@@ -14,10 +17,16 @@ import java.util.Map;
 
 /**
  * Placeholder blocks use only Scalpel's blockstate file; the original mod's file is left out. The bakery loads every
- * model inside its constructor, so the map is filtered as the constructor stores it.
+ * model inside its constructor, so the map is filtered as the constructor stores it. The field is made non-final
+ * because the wrapped store runs from a separate method.
  */
 @Mixin(ModelBakery.class)
 public abstract class ModelBakeryMixin {
+    @Shadow
+    @Final
+    @Mutable
+    private Map<ResourceLocation, List<ModelBakery.LoadedJson>> blockStateResources;
+
     @WrapOperation(method = "<init>", at = @At(value = "FIELD", opcode = Opcodes.PUTFIELD,
             target = "Lnet/minecraft/client/resources/model/ModelBakery;blockStateResources:Ljava/util/Map;"))
     private void scalpel$onlyPlaceholderBlockstates(ModelBakery bakery, Map<ResourceLocation, List<ModelBakery.LoadedJson>> blockStates,

@@ -59,7 +59,18 @@ public final class WorldgenFilter {
                 result = JsonScrub.scrub(work, isCut, KEEP);
                 replacement = "{\"type\":\"forge:none\"}";
             }
-            default -> result = JsonScrub.scrub(work, isCut, KEEP);
+            default -> {
+                // Registries Scalpel doesn't know (mods' own, such as Lost Cities palettes and parts): removing an
+                // entry could break the file's own structure, so a cut block becomes air, like in structures.
+                java.util.Set<String> toAir = JsonScrub.replaceReferences(work, ref -> resolver.isCut(ContentType.BLOCK, ref), "minecraft:air");
+                if (!toAir.isEmpty()) {
+                    DataFilter.change(core, "worldgen blocks replaced with air", id, directory + ": " + String.join(", ", toAir));
+                }
+                result = JsonScrub.scrub(work, isCut, KEEP);
+                if (!result.changed()) {
+                    return core.applies() ? work : json;
+                }
+            }
         }
         String hits = String.join(", ", result.hits());
         if (!result.dropWhole()) {

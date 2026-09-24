@@ -52,10 +52,21 @@ public final class JsonScrub {
         }
     }
 
-    /** Resolves a JSON string the way the game would read it as an id, or returns null if it cannot be one. */
+    /**
+     * Resolves a JSON string the way the game would read it as an id, or returns null if it cannot be one.
+     * Block state and item strings such as {@code mod:lamp[lit=true]} or {@code mod:sword{Damage:3}} count as
+     * references to the id before the bracket.
+     */
     public static String asId(String value) {
         if (value.isEmpty() || value.charAt(0) == '#' || value.length() > 256) {
             return null;
+        }
+        int suffix = firstOf(value, '[', '{');
+        if (suffix == 0) {
+            return null;
+        }
+        if (suffix > 0) {
+            value = value.substring(0, suffix);
         }
         int colon = value.indexOf(':');
         if (colon < 0) {
@@ -68,6 +79,54 @@ public final class JsonScrub {
             return "minecraft:" + value;
         }
         return value;
+    }
+
+    private static int firstOf(String value, char a, char b) {
+        int i = value.indexOf(a);
+        int j = value.indexOf(b);
+        if (i < 0) {
+            return j;
+        }
+        return j < 0 ? i : Math.min(i, j);
+    }
+
+    /**
+     * Replaces every string value that references a cut id with {@code replacement} (object keys are left alone).
+     * Used where removing an entry would break the file's own structure, such as a palette that maps characters to blocks.
+     *
+     * @return the cut ids that were replaced
+     */
+    public static Set<String> replaceReferences(JsonElement root, Predicate<String> isCut, String replacement) {
+        Set<String> replaced = new LinkedHashSet<>();
+        replaceIn(root, isCut, replacement, replaced);
+        return replaced;
+    }
+
+    private static void replaceIn(JsonElement element, Predicate<String> isCut, String replacement, Set<String> replaced) {
+        if (element.isJsonArray()) {
+            JsonArray array = element.getAsJsonArray();
+            for (int i = 0; i < array.size(); i++) {
+                JsonElement child = array.get(i);
+                String id = child.isJsonPrimitive() ? idIfCut(child.getAsJsonPrimitive(), isCut) : null;
+                if (id != null) {
+                    replaced.add(id);
+                    array.set(i, new JsonPrimitive(replacement));
+                } else {
+                    replaceIn(child, isCut, replacement, replaced);
+                }
+            }
+        } else if (element.isJsonObject()) {
+            for (Map.Entry<String, JsonElement> entry : element.getAsJsonObject().entrySet()) {
+                JsonElement child = entry.getValue();
+                String id = child.isJsonPrimitive() ? idIfCut(child.getAsJsonPrimitive(), isCut) : null;
+                if (id != null) {
+                    replaced.add(id);
+                    entry.setValue(new JsonPrimitive(replacement));
+                } else {
+                    replaceIn(child, isCut, replacement, replaced);
+                }
+            }
+        }
     }
 
     /** Every cut id referenced anywhere in {@code root}. */

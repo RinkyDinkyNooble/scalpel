@@ -34,7 +34,12 @@ minecraft {
                 }
             }
         }
-        client {}
+        client {
+            // ./gradlew runClient -PquickPlay=<world> opens a world in run/saves straight away.
+            if (project.hasProperty('quickPlay')) {
+                args '--quickPlaySingleplayer', project.property('quickPlay')
+            }
+        }
         server {
             args '--nogui'
         }
@@ -66,6 +71,11 @@ dependencies {
     compileOnly fg.deobf("mezz.jei:jei-${forge_minecraft_version}-forge-api:${jei_version}")
     compileOnly fg.deobf("dev.emi:emi-forge:${emi_version}:api")
     compileOnly fg.deobf("maven.modrinth:jade:${jade_version}")
+
+    // Only for the dev client (./gradlew runClient), never shipped.
+    runtimeOnly fg.deobf("mezz.jei:jei-${forge_minecraft_version}-forge:${jei_version}")
+    runtimeOnly fg.deobf("maven.modrinth:jade:${jade_version}")
+    runtimeOnly fg.deobf("maven.modrinth:farmers-delight:1.20.1-1.3.2")
 }
 
 tasks.named('processResources', ProcessResources).configure {
