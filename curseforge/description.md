@@ -4,7 +4,9 @@ Scalpel is for modpack makers. List the items, blocks and entities you don't wan
 
 Hiding content still leaves it loaded. Scalpel stops it from loading, so you can add a big decoration or palette mod and only pay for the parts you keep.
 
-**Existing worlds can break.** Set up Scalpel and your rules before a world is created.
+<span style="color:#e03e2d">**Existing worlds can break.** Blocks that are cut from a world that already has them turn into air or placeholders. Set up Scalpel and your rules before a world is created, and treat rule changes like adding or removing a mod.</span>
+
+<span style="color:#e6a700">**Needed on both client and server, with the same rules files.** Players with different rules can't join, and the log says why.</span>
 
 ## How it works
 
@@ -34,8 +36,8 @@ Recipes, tags, loot tables, advancements, world generation, structures, creative
 
 ## Good to know
 
-- Needed on both client and server, with the same rules files. Players with different rules can't join, and the message says why.
 - Minecraft 1.20.1, Forge 47 or newer.
 - JEI, EMI and Jade support is built in and optional.
+- <span style="color:#e6a700">Removing content that another mod still looks up can crash that mod. Use `redact` first, and run `/scalpel find <id>` before switching a rule to `remove`.</span>
 
 Full documentation and source: https://github.com/RinkyDinkyNooble/scalpel

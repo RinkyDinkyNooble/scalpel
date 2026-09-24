@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0 (not released yet)
+## 0.1.0 (2026-09-24)
 
 First version, for Minecraft 1.20.1 and Forge 47.
 
