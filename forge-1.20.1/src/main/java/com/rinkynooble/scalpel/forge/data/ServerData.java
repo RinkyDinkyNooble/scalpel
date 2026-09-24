@@ -13,7 +13,6 @@ import com.rinkynooble.scalpel.forge.mixin.IngredientAccessor;
 import com.rinkynooble.scalpel.forge.mixin.TagValueAccessor;
 import com.rinkynooble.scalpel.forge.registry.RegistryCutter;
 import net.minecraft.core.RegistryAccess;
-import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.ReloadableServerResources;
 import net.minecraft.server.packs.resources.PreparableReloadListener;
 import net.minecraft.world.item.ItemStack;
@@ -28,7 +27,6 @@ import net.minecraftforge.event.server.ServerStoppingEvent;
 import net.minecraftforge.eventbus.api.EventPriority;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.registries.ForgeRegistries;
-import net.minecraftforge.server.ServerLifecycleHooks;
 
 import java.util.ArrayList;
 import java.util.EnumSet;
@@ -58,9 +56,13 @@ public final class ServerData {
         DataFilter.beginDataLoad();
     }
 
+    /** The recipe manager of the last data load. The first load happens before the server object exists. */
+    private static volatile RecipeManager loadedRecipes;
+
     private static void addFinalRecipePass(AddReloadListenerEvent event) {
         ReloadableServerResources resources = event.getServerResources();
         RegistryAccess access = event.getRegistryAccess();
+        loadedRecipes = resources.getRecipeManager();
         event.addListener((PreparableReloadListener) (barrier, manager, prepProfiler, applyProfiler, background, main) ->
                 barrier.wait(null).thenRunAsync(() -> finalRecipePass(resources.getRecipeManager(), access), main));
     }
@@ -248,9 +250,9 @@ public final class ServerData {
         }
         ScalpelCore core = Scalpel.core();
         IdSuggestions.dataChanged();
-        MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
-        if (server != null && core.settings().cascadeDepth() > 0 && !DataFilter.lostProducers().isEmpty()) {
-            core.report().cascade(cascade(core, server), core.settings().cascadeDepth());
+        RecipeManager recipes = loadedRecipes;
+        if (recipes != null && core.settings().cascadeDepth() > 0 && !DataFilter.lostProducers().isEmpty()) {
+            core.report().cascade(cascade(core, recipes, event.getRegistryAccess()), core.settings().cascadeDepth());
         }
         core.report().evaluated(EnumSet.of(ContentType.RECIPE, ContentType.LOOT, ContentType.ADVANCEMENT, ContentType.TAG));
         for (Rule rule : core.report().unmatchedRules(core.rules().rules())) {
@@ -264,10 +266,9 @@ public final class ServerData {
         core.writeReport();
     }
 
-    private static List<Set<String>> cascade(ScalpelCore core, MinecraftServer server) {
-        RegistryAccess access = server.registryAccess();
+    private static List<Set<String>> cascade(ScalpelCore core, RecipeManager recipes, RegistryAccess access) {
         List<Cascade.RecipeInfo> infos = new ArrayList<>();
-        for (Recipe<?> recipe : server.getRecipeManager().getRecipes()) {
+        for (Recipe<?> recipe : recipes.getRecipes()) {
             ItemStack result = safeResult(recipe, access);
             if (result == null || result.isEmpty()) {
                 continue;
