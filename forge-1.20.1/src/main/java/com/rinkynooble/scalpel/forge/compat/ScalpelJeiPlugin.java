@@ -5,14 +5,18 @@ import com.rinkynooble.scalpel.forge.registry.RegistryCutter;
 import mezz.jei.api.IModPlugin;
 import mezz.jei.api.JeiPlugin;
 import mezz.jei.api.constants.VanillaTypes;
+import mezz.jei.api.runtime.IIngredientManager;
 import mezz.jei.api.runtime.IJeiRuntime;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.List;
 
-/** Hides redacted, hidden and removed items from JEI. Only loaded when JEI is installed. */
+/**
+ * Hides redacted, hidden and removed items from JEI. Only loaded when JEI is installed.
+ * The stacks come from JEI's own list, so every NBT variant it shows (each enchanted book, potion and so on)
+ * is hidden along with the plain item.
+ */
 @JeiPlugin
 public class ScalpelJeiPlugin implements IModPlugin {
     private static final ResourceLocation UID = new ResourceLocation(Scalpel.MOD_ID, "hide_cut");
@@ -24,13 +28,13 @@ public class ScalpelJeiPlugin implements IModPlugin {
 
     @Override
     public void onRuntimeAvailable(IJeiRuntime runtime) {
-        List<ItemStack> hide = BuiltInRegistries.ITEM.stream()
-                .filter(RegistryCutter::isCutItem)
-                .map(ItemStack::new)
+        IIngredientManager ingredients = runtime.getIngredientManager();
+        List<ItemStack> hide = ingredients.getAllIngredients(VanillaTypes.ITEM_STACK).stream()
+                .filter(stack -> !stack.isEmpty() && RegistryCutter.isCutItem(stack.getItem()))
                 .toList();
         if (!hide.isEmpty()) {
-            runtime.getIngredientManager().removeIngredientsAtRuntime(VanillaTypes.ITEM_STACK, hide);
-            Scalpel.core().log().info("Hid " + hide.size() + " items from JEI.");
+            ingredients.removeIngredientsAtRuntime(VanillaTypes.ITEM_STACK, hide);
+            Scalpel.core().log().info("Hid " + hide.size() + " item stacks from JEI.");
         }
     }
 }

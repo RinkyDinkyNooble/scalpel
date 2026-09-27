@@ -119,12 +119,13 @@ For everything that is cut, whether redacted or removed:
 - **Recipes** that make it are removed. Recipes that use it are removed or rewritten.
 - **Tags** lose it. A tag left empty by a cut is tracked, so recipes that use that tag are handled too.
 - **Loot tables** lose the entries that drop it. A cut block's or entity's own loot table goes.
+- **Generated loot**: cut items never drop, even when a loot function creates them. Vanilla loot tables list a plain book and enchant it as it drops, so Scalpel also checks the finished drops with its own loot modifier, `scalpel:strip_cut_items`. It runs after every other global loot modifier.
 - **Loot modifiers** that mention it are removed.
 - **Advancements** that mention it are removed, along with their children.
 - **World generation**: ore targets and spawn entries that mention it are taken out. A feature that can't work without it is switched off. In other mods' world generation data, such as Lost Cities palettes and building parts, a cut block becomes air.
 - **Structures** place air where a cut block was, and leave out cut entities.
 - **Creative tabs** and **villager and wandering trader trades** leave it out.
-- **JEI, EMI and Jade**: hidden in JEI and EMI. Jade shows which id a placeholder block replaced.
+- **JEI, EMI and Jade**: hidden in JEI and EMI. Cutting an item hides all of its variants, such as every enchanted book or every potion. Jade shows which id a placeholder block replaced.
 
 Each of these changes is listed in the report with the file or structure it came from. That way you can fix the source yourself, and Scalpel has less to clean up.
 
@@ -143,7 +144,7 @@ Vanilla code keeps direct references to its own blocks, items and entities, so S
 
 - `redact` hides vanilla content instead of replacing it. It stays registered as itself, but it's removed from recipes, tags, loot, world generation, structures, creative tabs, trades and recipe viewers. The tooltip says "Hidden by Scalpel".
 - `remove` on vanilla content acts like `redact`, unless you set `allowRemovingVanilla = true`. Removing vanilla content can crash the game.
-- A few ids are protected, such as stone, water, fire, portals and item entities. Set `protectCriticalIds = false` to allow cutting them. Air and the player can never be cut.
+- A few ids are protected, such as stone, water, fire, portals, enchanted books and item entities. Set `protectCriticalIds = false` to allow cutting them. Air and the player can never be cut.
 
 ## Settings
 
@@ -200,6 +201,7 @@ Rules files live in `config/`, so they ship with the pack like any other config.
 ## Compatibility
 
 - JEI, EMI and Jade support is built in and optional.
+- Scalpel's loot modifier runs last among global loot modifiers, whatever order the data packs list them in. LootJS runs after it (see [Limits](#limits)).
 - Tested with ModernFix, FerriteCore, Smooth Boot (Reloaded), Saturn, KubeJS, Farmer's Delight, and several decoration and mob mods.
 - If ModernFix's dynamic resources option is on, the original mod's blockstate files may log warnings for placeholder blocks. They look right regardless.
 
@@ -208,7 +210,7 @@ Rules files live in `config/`, so they ship with the pack like any other config.
 - Existing worlds with cut content in them can break.
 - A mod that casts its own registry entry to its own class will crash with `redact`. This is common in tech mods and rare in decoration mods. Remove the whole mod's content instead, or keep that entry.
 - Textures of cut blocks and items are still stitched into the texture atlas. Models are skipped.
-- Loot changes made by scripts at runtime (LootJS, global loot modifiers written in code) are not filtered.
+- LootJS applies its changes after every global loot modifier, Scalpel's included. A cut item that a LootJS script adds to loot can still drop. Items that mod code spawns directly, without a loot table, are not checked either.
 
 ## Building
 

@@ -1,6 +1,5 @@
 package com.rinkynooble.scalpel.forge.data;
 
-import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.rinkynooble.scalpel.core.ContentType;
@@ -35,6 +34,8 @@ public final class DataFilter {
     private static final Set<String> lostProducers = ConcurrentHashMap.newKeySet();
     /** Recipe ids that came from files, so the final pass knows which recipes scripts added. */
     private static final Set<String> scannedRecipes = ConcurrentHashMap.newKeySet();
+    /** Loot modifier files dropped by this load, which Forge's index must skip. */
+    private static final Set<ResourceLocation> droppedLootModifiers = ConcurrentHashMap.newKeySet();
 
     private DataFilter() {
     }
@@ -42,7 +43,9 @@ public final class DataFilter {
     public static void beginDataLoad() {
         lostProducers.clear();
         scannedRecipes.clear();
+        droppedLootModifiers.clear();
         TagFilter.reset();
+        CutLoot.reset();
         Scalpel.core().beginDataLoad();
     }
 
@@ -52,6 +55,10 @@ public final class DataFilter {
 
     public static boolean wasScanned(String recipeId) {
         return scannedRecipes.contains(recipeId);
+    }
+
+    public static boolean isDroppedLootModifier(ResourceLocation id) {
+        return droppedLootModifiers.contains(id);
     }
 
     /** Called with every directory scanned through {@code SimpleJsonResourceReloadListener#scanDirectory}. */
@@ -295,17 +302,15 @@ public final class DataFilter {
         if (dropped.isEmpty() || !core.applies()) {
             return;
         }
-        files.keySet().removeIf(key -> dropped.contains(key.toString()));
-        // The index lists modifiers by id; a missing file there is an error, so take it out of the list as well.
-        JsonElement index = files.get(new ResourceLocation(LOOT_MODIFIER_INDEX));
-        if (index != null && index.isJsonObject() && index.getAsJsonObject().get("entries") instanceof JsonArray entries) {
-            for (int i = entries.size() - 1; i >= 0; i--) {
-                JsonElement e = entries.get(i);
-                if (e.isJsonPrimitive() && dropped.contains(JsonScrub.asId(e.getAsString()))) {
-                    entries.remove(i);
-                }
+        // Forge reads its index from the data packs rather than from this map, so it would still ask for these ids.
+        // LootModifierManagerMixin keeps them out of its list.
+        files.keySet().removeIf(key -> {
+            if (dropped.contains(key.toString())) {
+                droppedLootModifiers.add(key);
+                return true;
             }
-        }
+            return false;
+        });
     }
 
     // ------------------------------------------------------------------ shared

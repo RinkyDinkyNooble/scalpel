@@ -11,6 +11,7 @@ import com.rinkynooble.scalpel.forge.net.Handshake;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.fml.DistExecutor;
+import com.rinkynooble.scalpel.forge.data.CutLoot;
 import com.rinkynooble.scalpel.forge.data.ServerData;
 import com.rinkynooble.scalpel.forge.data.TabsAndTrades;
 import net.minecraftforge.common.MinecraftForge;
@@ -29,6 +30,7 @@ public final class ScalpelForge {
         IEventBus modBus = FMLJavaModLoadingContext.get().getModEventBus();
         ModLoadingContext.get().registerConfig(ModConfig.Type.COMMON, ForgeSettings.SPEC, ForgeSettings.FILE_NAME);
         RemovedItem.register(modBus);
+        CutLoot.register(modBus);
         modBus.addListener(this::commonSetup);
         IEventBus forgeBus = MinecraftForge.EVENT_BUS;
         ServerData.register(forgeBus);

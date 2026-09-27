@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.1 (2026-09-27)
+
+- Cutting an item now hides all of its variants in JEI. Before, `redact item minecraft:enchanted_book` left every enchanted book, potion or other NBT variant visible.
+- Cut items no longer come out of loot when a loot function creates them, such as the enchanted books in fishing treasure and chest loot. A new global loot modifier, `scalpel:strip_cut_items`, removes them. It runs after every other global loot modifier, and the report lists each loot table it had to clean.
+- When Scalpel removes another mod's loot modifier because it uses cut content, Forge no longer logs a "Could not decode GlobalLootModifier" warning for it.
+
 ## 0.1.0 (2026-09-24)
 
 First version, for Minecraft 1.20.1 and Forge 47.

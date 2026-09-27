@@ -9,6 +9,7 @@
     "ForgeRegistryMixin",
     "ForgeSpawnEggItemAccessor",
     "IngredientAccessor",
+    "LootModifierManagerMixin",
     "MappedRegistryAccessor",
     "NbtUtilsMixin",
     "RegisterEventMixin",
