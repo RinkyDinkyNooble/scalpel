@@ -5,6 +5,7 @@ import java.util.Locale;
 /** Rule verbs, in precedence order: when several rules match one id, the lowest ordinal wins. */
 public enum Verb {
     KEEP,
+    HIDE,
     REDACT,
     REMOVE;
 

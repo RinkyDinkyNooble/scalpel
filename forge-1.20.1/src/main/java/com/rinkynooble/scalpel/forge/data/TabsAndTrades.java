@@ -23,7 +23,8 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Two things mods fill in code rather than data: creative tabs and villager / wandering trader trades.
- * Tabs are filtered once when they are built. Trades are wrapped so an offer that would contain cut content
+ * Tabs are filtered once when they are built, leaving out cut and hidden items. Trades keep hidden items, and are
+ * wrapped so an offer that would contain cut content
  * is skipped (the game already skips offers that come back empty); that check only runs when a villager
  * rolls new trades.
  */
@@ -46,7 +47,7 @@ public final class TabsAndTrades {
         }
         List<ItemStack> remove = new ArrayList<>();
         for (var entry : event.getEntries()) {
-            if (RegistryCutter.isCutItem(entry.getKey().getItem())) {
+            if (RegistryCutter.isUnlisted(entry.getKey().getItem())) {
                 remove.add(entry.getKey());
             }
         }

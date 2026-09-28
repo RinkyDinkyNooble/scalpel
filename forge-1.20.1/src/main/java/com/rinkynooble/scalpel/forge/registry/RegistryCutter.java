@@ -42,7 +42,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
 /**
- * Decides, at registration time, whether an item, block or entity type is kept, redacted or removed.
+ * Decides, at registration time, whether an item, block or entity type is kept, hidden, redacted or removed.
  *
  * <p>Two entry points, both called from mixins:
  * <ul>
@@ -154,11 +154,15 @@ public final class RegistryCutter {
             core.report().protectedHit(type, id, modId, decision);
             core.log().detail("protected " + type.keyword() + " " + id + ": " + decision.describe());
         }
+        if (decision.isHidden()) {
+            // Hidden content registers as itself; only recipe viewers and creative tabs leave it out.
+            record(core, type, id, modId, decision);
+        }
         if (type == ContentType.ITEM && !decision.isCut()) {
             for (String blockId : placedBlocks) {
                 if (resolver.isCut(ContentType.BLOCK, blockId)) {
-                    core.warn("item " + id + " is " + decision.action().name().toLowerCase(java.util.Locale.ROOT) + " but places cut block "
-                            + blockId + ". Placing it will fail or crash; cut the item too.");
+                    core.warn("item " + id + " is not cut but places cut block " + blockId
+                            + ". Placing it will fail or crash; cut the item too.");
                 }
             }
         }
@@ -167,9 +171,9 @@ public final class RegistryCutter {
         }
         if (decision.action() == Action.REDACT && name.getNamespace().equals("minecraft")) {
             // Vanilla code relies on its own classes and block states (beds, for example), so vanilla content is
-            // hidden and filtered out of all data, but the object itself stays registered.
+            // left out of every list and filtered out of all data, but the object itself stays registered.
             decision = new Decision(Action.REDACT, decision.rule(), decision.matched(),
-                    (decision.note() == null ? "" : decision.note() + "; ") + "vanilla: hidden, not replaced");
+                    (decision.note() == null ? "" : decision.note() + "; ") + "vanilla: filtered out, not replaced");
             record(core, type, id, modId, decision);
             return null;
         }
@@ -227,15 +231,30 @@ public final class RegistryCutter {
         return id == null ? "minecraft:air" : id;
     }
 
-    /** True for items that were cut: placeholders, ghosts, refused originals and hidden vanilla items. */
+    /** True for items that were cut: placeholders, ghosts, refused originals and redacted vanilla items. */
     public static boolean isCutItem(net.minecraft.world.item.Item item) {
         String id = itemId(item);
         return id.equals(RemovedItem.ID) || Scalpel.core().resolver().isCut(ContentType.ITEM, id);
     }
 
+    /** True for items a {@code hide} rule matched. They are not cut: recipes, loot and tags keep them. */
+    public static boolean isHiddenItem(net.minecraft.world.item.Item item) {
+        return Scalpel.core().resolver().isHidden(ContentType.ITEM, itemId(item));
+    }
+
+    /** True for items left out of recipe viewers and creative tabs: cut or hidden, and not in a dry run. */
+    public static boolean isUnlisted(net.minecraft.world.item.Item item) {
+        return Scalpel.core().applies() && (isCutItem(item) || isHiddenItem(item));
+    }
+
     private static void record(ScalpelCore core, ContentType type, String id, String modId, Decision decision) {
-        core.resolver().markCut(type, id, decision);
-        core.report().cut(type, id, modId, decision);
+        if (decision.isHidden()) {
+            core.resolver().markHidden(type, id, decision);
+            core.report().hidden(type, id, modId, decision);
+        } else {
+            core.resolver().markCut(type, id, decision);
+            core.report().cut(type, id, modId, decision);
+        }
         core.log().detail((core.applies() ? "" : "[dry run] ") + decision.action().name().toLowerCase(java.util.Locale.ROOT) + " "
                 + type.keyword() + " " + id + " (mod " + modId + ")" + ruleSuffix(decision));
     }

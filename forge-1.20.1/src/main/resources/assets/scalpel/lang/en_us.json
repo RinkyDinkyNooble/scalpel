@@ -5,5 +5,5 @@
   "tooltip.scalpel.original": "Was %s",
   "item.scalpel.removed": "Removed",
   "tooltip.scalpel.removed": "Stands in for removed items",
-  "tooltip.scalpel.hidden": "Hidden by Scalpel"
+  "tooltip.scalpel.redacted_vanilla": "Redacted by Scalpel"
 }

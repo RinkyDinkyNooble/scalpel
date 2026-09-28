@@ -60,7 +60,7 @@ public final class RuleParser {
 
         Verb verb = Verb.parse(tokens.get(0));
         if (verb == null) {
-            throw new IllegalArgumentException("unknown verb '" + tokens.get(0) + "' (use keep, redact or remove)");
+            throw new IllegalArgumentException("unknown verb '" + tokens.get(0) + "' (use keep, hide, redact or remove)");
         }
 
         String typeKeyword = tokens.get(1);
@@ -71,6 +71,9 @@ public final class RuleParser {
         boolean registry = types.iterator().next().isRegistry();
         if (verb == Verb.REDACT && !registry) {
             throw new IllegalArgumentException("only items, blocks and entities can be redacted; use 'remove " + typeKeyword + "'");
+        }
+        if (verb == Verb.HIDE && !registry) {
+            throw new IllegalArgumentException("only items, blocks and entities can be hidden");
         }
 
         String patternToken = tokens.get(2);
@@ -89,7 +92,7 @@ public final class RuleParser {
             if (mode == null) {
                 throw new IllegalArgumentException("unknown option '" + option + "' (options: rewrite, drop)");
             }
-            if (verb == Verb.KEEP || !(types.contains(ContentType.ITEM) || types.contains(ContentType.BLOCK))) {
+            if (verb == Verb.KEEP || verb == Verb.HIDE || !(types.contains(ContentType.ITEM) || types.contains(ContentType.BLOCK))) {
                 throw new IllegalArgumentException("'" + option + "' only applies to redact/remove rules for items, blocks or any");
             }
             if (recipeMode != null && recipeMode != mode) {

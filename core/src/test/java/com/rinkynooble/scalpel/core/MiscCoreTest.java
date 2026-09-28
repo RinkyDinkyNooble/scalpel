@@ -129,4 +129,28 @@ class MiscCoreTest {
         assertTrue(Files.readString(temp.resolve("logs/scalpel.log")).contains("2 rules from 1 files"));
         assertTrue(mirrored.toString().contains("rules hash"));
     }
+
+    @Test
+    void reportListsHiddenApartFromCuts(@TempDir Path temp) throws IOException {
+        Path rules = temp.resolve("config/scalpel");
+        Files.createDirectories(rules);
+        Files.writeString(rules.resolve("t.rules"), "hide item deco:*\n");
+        ScalpelLog.Mirror quiet = new ScalpelLog.Mirror() {
+            public void info(String m) { }
+            public void warn(String m) { }
+            public void error(String m) { }
+        };
+        ScalpelCore core = ScalpelCore.start(rules, temp.resolve("logs"), "0.2.0", "0.2.0 (test)", Settings.DEFAULTS, quiet);
+        Decision d = core.resolver().decide(ContentType.ITEM, "deco:lamp");
+        core.resolver().markHidden(ContentType.ITEM, "deco:lamp", d);
+        core.report().hidden(ContentType.ITEM, "deco:lamp", "deco", d);
+        core.report().evaluated(ContentType.REGISTRY_TYPES);
+        core.writeReport();
+
+        String report = Files.readString(core.reportFile());
+        assertTrue(report.contains("Nothing was cut."), report);
+        assertTrue(report.contains("Hidden (1). Left out of JEI, EMI and creative tabs."), report);
+        assertTrue(report.contains("deco:lamp") && report.contains("hide (t.rules:1)"), report);
+        assertTrue(!report.contains("Unmatched rules"), report);
+    }
 }

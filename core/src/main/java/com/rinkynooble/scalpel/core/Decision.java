@@ -18,6 +18,8 @@ public record Decision(Action action, Rule rule, List<Rule> matched, String note
         NONE,
         /** A keep rule applies. */
         KEEP,
+        /** Registered and working as normal, but left out of recipe viewers and creative tabs. */
+        HIDE,
         /** A cut rule matched, but the id is protected. */
         PROTECTED,
         /** Registered as a Redacted placeholder. */
@@ -30,6 +32,10 @@ public record Decision(Action action, Rule rule, List<Rule> matched, String note
 
     public boolean isCut() {
         return action == Action.REDACT || action == Action.REMOVE;
+    }
+
+    public boolean isHidden() {
+        return action == Action.HIDE;
     }
 
     /** The rule's recipe option, falling back to the global setting. */

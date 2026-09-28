@@ -13,9 +13,10 @@ import net.minecraft.world.item.ItemStack;
 import java.util.List;
 
 /**
- * Hides redacted, hidden and removed items from JEI. Only loaded when JEI is installed.
- * The stacks come from JEI's own list, so every NBT variant it shows (each enchanted book, potion and so on)
- * is hidden along with the plain item.
+ * Hides cut items and items a hide rule matched from JEI. Only loaded when JEI is installed.
+ * JEI builds its item list from the creative tabs, which {@code TabsAndTrades} has already filtered, so this usually
+ * finds nothing left to do. It catches stacks that other plugins add outside the tabs. The stacks come from JEI's own
+ * list, so every NBT variant it shows (each enchanted book, potion and so on) is hidden along with the plain item.
  */
 @JeiPlugin
 public class ScalpelJeiPlugin implements IModPlugin {
@@ -30,7 +31,7 @@ public class ScalpelJeiPlugin implements IModPlugin {
     public void onRuntimeAvailable(IJeiRuntime runtime) {
         IIngredientManager ingredients = runtime.getIngredientManager();
         List<ItemStack> hide = ingredients.getAllIngredients(VanillaTypes.ITEM_STACK).stream()
-                .filter(stack -> !stack.isEmpty() && RegistryCutter.isCutItem(stack.getItem()))
+                .filter(stack -> !stack.isEmpty() && RegistryCutter.isUnlisted(stack.getItem()))
                 .toList();
         if (!hide.isEmpty()) {
             ingredients.removeIngredientsAtRuntime(VanillaTypes.ITEM_STACK, hide);

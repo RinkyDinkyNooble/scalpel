@@ -7,13 +7,15 @@
 #
 # Verbs
 #   keep     protects matching ids from every other rule
+#   hide     the content stays and works as normal, but JEI, EMI and creative tabs leave it out
 #   redact   swaps the content for a blank "Redacted" placeholder (the safe choice)
 #   remove   the content never loads at all (saves the most, but some mods crash without it)
-#   If several rules match the same id, keep wins over redact, and redact wins over remove.
+#   If several rules match the same id, the gentler one wins: keep, then hide, then redact, then remove.
 #
 # Types
 #   item, block, entity, any (all three), recipe, loot, advancement, tag
 #   Recipes, loot tables, advancements and tags can only be kept or removed.
+#   Only items, blocks and entities can be hidden or redacted.
 #
 # Patterns
 #   examplemod:ruby            one exact id
@@ -30,6 +32,7 @@
 #
 # redact any    examplemod:*
 # keep   block  examplemod:ruby_block
+# hide   item   examplemod:creative_*
 # remove item   examplemod:*_eggs        rewrite
 # remove recipe minecraft:*_boat
 # remove loot   minecraft:chests/*

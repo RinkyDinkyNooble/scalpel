@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.0 (2026-09-28)
+
+- New `hide` verb. Hidden items, blocks and entities stay in the game and keep working, with their recipes, loot, tags, trades and world generation, but they're left out of JEI, EMI and the creative tabs, including the search tab. When rules overlap, the gentler one wins: `keep`, then `hide`, then `redact`, then `remove`.
+- Hiding a block or an entity also hides the item that places or spawns it. Protected ids can be hidden.
+- The report lists hidden content in its own section, and `/scalpel explain` and `/scalpel test` show it.
+- Dry run no longer hides anything in JEI or EMI.
+- Redacted vanilla items say "Redacted by Scalpel" in their tooltip, so "hidden" only ever means the new verb.
+
 ## 0.1.1 (2026-09-27)
 
 - Cutting an item now hides all of its variants in JEI. Before, `redact item minecraft:enchanted_book` left every enchanted book, potion or other NBT variant visible.

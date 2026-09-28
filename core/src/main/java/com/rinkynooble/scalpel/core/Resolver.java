@@ -16,19 +16,25 @@ import java.util.concurrent.ConcurrentHashMap;
  * Turns rules into decisions and remembers what was cut, so linked content (block items, spawn eggs)
  * and the data filters can follow.
  *
- * <p>Precedence: keep, then redact, then remove. Then protection, then the vanilla guard
- * ({@code remove} on a {@code minecraft:} id becomes {@code redact} unless allowed).
+ * <p>Precedence: keep, then hide, then redact, then remove. Then protection, then the vanilla guard
+ * ({@code remove} on a {@code minecraft:} id becomes {@code redact} unless allowed). Hiding changes nothing but
+ * the lists a player sees, so only the hard protection applies to it.
+ *
+ * <p>Hidden ids are kept apart from cut ones: every data filter reads the cut ids, and hidden content must keep
+ * its recipes, loot, tags and world generation.
  */
 public final class Resolver {
     private volatile RuleSet rules;
     private final Settings settings;
     private final Map<ContentType, Map<String, Decision>> cut = new EnumMap<>(ContentType.class);
+    private final Map<ContentType, Map<String, Decision>> hidden = new EnumMap<>(ContentType.class);
 
     public Resolver(RuleSet rules, Settings settings) {
         this.rules = rules;
         this.settings = settings;
         for (ContentType type : ContentType.REGISTRY_TYPES) {
             cut.put(type, new ConcurrentHashMap<>());
+            hidden.put(type, new ConcurrentHashMap<>());
         }
     }
 
@@ -84,6 +90,9 @@ public final class Resolver {
         if (level == Protection.Level.HARD) {
             return new Decision(Action.PROTECTED, rule, matched, join(note, "always protected"));
         }
+        if (verb == Verb.HIDE) {
+            return new Decision(Action.HIDE, rule, matched, note);
+        }
         if (level == Protection.Level.SOFT && settings.protectCriticalIds()) {
             return new Decision(Action.PROTECTED, rule, matched, join(note, "protected, see protectCriticalIds"));
         }
@@ -123,24 +132,38 @@ public final class Resolver {
         }
         for (String blockId : placesBlocks) {
             Decision block = cut.get(ContentType.BLOCK).get(blockId);
+            if (block == null) {
+                block = hidden.get(ContentType.BLOCK).get(blockId);
+            }
             if (block != null) {
-                return guard(ContentType.ITEM, id, block.action() == Action.REDACT ? Verb.REDACT : Verb.REMOVE,
-                        block.rule(), block.matched(), "linked: places block " + blockId);
+                return guard(ContentType.ITEM, id, verbFor(block.action()), block.rule(), block.matched(),
+                        "linked: places block " + blockId);
             }
         }
         if (spawnsEntity != null) {
             // Items register before entity types, so the entity may not have been decided yet.
             Decision entity = cut.get(ContentType.ENTITY).get(spawnsEntity);
             if (entity == null) {
+                entity = hidden.get(ContentType.ENTITY).get(spawnsEntity);
+            }
+            if (entity == null) {
                 Decision pending = peek(ContentType.ENTITY, spawnsEntity);
-                entity = pending.isCut() ? pending : null;
+                entity = pending.isCut() || pending.isHidden() ? pending : null;
             }
             if (entity != null) {
-                return guard(ContentType.ITEM, id, entity.action() == Action.REDACT ? Verb.REDACT : Verb.REMOVE,
-                        entity.rule(), entity.matched(), "linked: spawn egg for " + spawnsEntity);
+                return guard(ContentType.ITEM, id, verbFor(entity.action()), entity.rule(), entity.matched(),
+                        "linked: spawn egg for " + spawnsEntity);
             }
         }
         return own;
+    }
+
+    private static Verb verbFor(Action action) {
+        return switch (action) {
+            case HIDE -> Verb.HIDE;
+            case REDACT -> Verb.REDACT;
+            default -> Verb.REMOVE;
+        };
     }
 
     /**
@@ -164,6 +187,27 @@ public final class Resolver {
         if (decision.isCut()) {
             cut.get(type).put(id, decision);
         }
+    }
+
+    /** Records that {@code id} was hidden (or would be, in a dry run). */
+    public void markHidden(ContentType type, String id, Decision decision) {
+        if (decision.isHidden()) {
+            hidden.get(type).put(id, decision);
+        }
+    }
+
+    /** The hide decision for {@code id}, or null if it was not hidden. */
+    public Decision hiddenState(ContentType type, String id) {
+        Map<String, Decision> map = hidden.get(type);
+        return map == null ? null : map.get(id);
+    }
+
+    public boolean isHidden(ContentType type, String id) {
+        return hiddenState(type, id) != null;
+    }
+
+    public Map<String, Decision> hiddenEntries(ContentType type) {
+        return Collections.unmodifiableMap(hidden.get(type));
     }
 
     /** The cut decision for {@code id}, or null if it was not cut. */

@@ -67,6 +67,21 @@ class RuleParserTest {
     }
 
     @Test
+    void hideIsForItemsBlocksAndEntitiesWithoutOptions() {
+        RuleParser.Result result = parse(
+                "hide any examplemod:*",
+                "hide recipe a:b",
+                "hide item a:b rewrite");
+        assertEquals(1, result.rules().size());
+        assertEquals(Verb.HIDE, result.rules().get(0).verb());
+        assertEquals("hide any examplemod:*", result.rules().get(0).canonical());
+        assertEquals(2, result.errors().size());
+        assertTrue(result.errors().get(0).message().contains("can be hidden"));
+        assertTrue(result.errors().get(1).message().contains("only applies to redact/remove"));
+        assertTrue(parse("hdie item a:b").errors().get(0).message().contains("keep, hide, redact or remove"));
+    }
+
+    @Test
     void sameOptionTwiceIsFine() {
         Rule rule = RuleParser.parseLine("f", 1, "remove item a:b drop drop");
         assertEquals(RecipeMode.DROP, rule.recipeMode());

@@ -33,6 +33,7 @@ public final class Report {
 
     private final Collection<CutEntry> cuts = new ConcurrentLinkedQueue<>();
     private final Collection<CutEntry> protectedHits = new ConcurrentLinkedQueue<>();
+    private final Collection<CutEntry> hidden = new ConcurrentLinkedQueue<>();
     private final Set<String> warnings = Collections.synchronizedSet(new LinkedHashSet<>());
     private final Set<Change> changes = java.util.concurrent.ConcurrentHashMap.newKeySet();
     private final Set<ContentType> evaluated = Collections.synchronizedSet(EnumSet.noneOf(ContentType.class));
@@ -45,6 +46,10 @@ public final class Report {
 
     public void protectedHit(ContentType type, String id, String owner, Decision decision) {
         protectedHits.add(new CutEntry(type, id, owner, decision));
+    }
+
+    public void hidden(ContentType type, String id, String owner, Decision decision) {
+        hidden.add(new CutEntry(type, id, owner, decision));
     }
 
     public void warn(String warning) {
@@ -177,19 +182,13 @@ public final class Report {
             if (dryRun) {
                 out.append("(dry run: would be)\n");
             }
-            Map<String, List<CutEntry>> byMod = new TreeMap<>();
-            for (CutEntry entry : cuts) {
-                byMod.computeIfAbsent(entry.owner(), k -> new ArrayList<>()).add(entry);
-            }
-            for (Map.Entry<String, List<CutEntry>> mod : byMod.entrySet()) {
-                List<CutEntry> entries = mod.getValue();
-                entries.sort(Comparator.comparing((CutEntry e) -> e.type()).thenComparing(CutEntry::id));
-                out.append("\n[").append(mod.getKey()).append("] ").append(entries.size()).append('\n');
-                for (CutEntry entry : entries) {
-                    out.append("  ").append(pad(entry.type().keyword(), 7)).append(pad(entry.id(), 56))
-                            .append(entry.decision().describe()).append('\n');
-                }
-            }
+            byMod(out, cuts);
+            out.append('\n');
+        }
+        if (!hidden.isEmpty()) {
+            out.append("Hidden (").append(hidden.size()).append(dryRun ? ", dry run: would be" : "")
+                    .append("). Left out of JEI, EMI and creative tabs. Everything else about them still works.\n");
+            byMod(out, hidden);
             out.append('\n');
         }
         if (!protectedHits.isEmpty()) {
@@ -199,6 +198,22 @@ public final class Report {
                         .append(entry.decision().describe()).append('\n');
             }
             out.append('\n');
+        }
+    }
+
+    private static void byMod(StringBuilder out, Collection<CutEntry> all) {
+        Map<String, List<CutEntry>> byMod = new TreeMap<>();
+        for (CutEntry entry : all) {
+            byMod.computeIfAbsent(entry.owner(), k -> new ArrayList<>()).add(entry);
+        }
+        for (Map.Entry<String, List<CutEntry>> mod : byMod.entrySet()) {
+            List<CutEntry> entries = mod.getValue();
+            entries.sort(Comparator.comparing((CutEntry e) -> e.type()).thenComparing(CutEntry::id));
+            out.append("\n[").append(mod.getKey()).append("] ").append(entries.size()).append('\n');
+            for (CutEntry entry : entries) {
+                out.append("  ").append(pad(entry.type().keyword(), 7)).append(pad(entry.id(), 56))
+                        .append(entry.decision().describe()).append('\n');
+            }
         }
     }
 

@@ -108,7 +108,7 @@ public final class ScalpelClient {
         if (RemovedItem.ID.equals(RegistryCutter.itemId(item))) {
             event.getToolTip().add(Component.translatable("tooltip.scalpel.removed").withStyle(ChatFormatting.GRAY));
         } else if (RegistryCutter.isCutItem(item)) {
-            event.getToolTip().add(Component.translatable("tooltip.scalpel.hidden").withStyle(ChatFormatting.GRAY));
+            event.getToolTip().add(Component.translatable("tooltip.scalpel.redacted_vanilla").withStyle(ChatFormatting.GRAY));
         }
     }
 }

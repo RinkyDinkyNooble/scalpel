@@ -132,7 +132,7 @@ public final class ScalpelCommand {
                 lines.add(com.rinkynooble.scalpel.core.Report.plural(type) + ":");
             }
             for (String id : matches) {
-                Decision state = type.isRegistry() ? resolver.cutState(type, id) : null;
+                Decision state = type.isRegistry() ? state(resolver, type, id) : null;
                 lines.add("  " + id + (state == null ? "" : "  (" + stateWord(state) + ")"));
             }
         }
@@ -151,7 +151,7 @@ public final class ScalpelCommand {
         Resolver resolver = Scalpel.core().resolver();
         List<String> lines = new ArrayList<>();
         for (ContentType type : ContentType.values()) {
-            Decision state = type.isRegistry() ? resolver.cutState(type, id) : null;
+            Decision state = type.isRegistry() ? state(resolver, type, id) : null;
             Decision now = resolver.peek(type, id);
             if (type.isRegistry() && state == null && !registered(type, location)) {
                 continue;
@@ -198,11 +198,18 @@ public final class ScalpelCommand {
         };
     }
 
+    /** What happened to a registry id at startup: cut, hidden, or null for neither. */
+    private static Decision state(Resolver resolver, ContentType type, String id) {
+        Decision cut = resolver.cutState(type, id);
+        return cut != null ? cut : resolver.hiddenState(type, id);
+    }
+
     private static String stateWord(Decision state) {
-        if (state.action() == Decision.Action.REMOVE) {
-            return "removed";
-        }
-        return state.note() != null && state.note().contains("vanilla: hidden") ? "hidden" : "redacted";
+        return switch (state.action()) {
+            case REMOVE -> "removed";
+            case HIDE -> "hidden";
+            default -> "redacted";
+        };
     }
 
     // ------------------------------------------------------------------ find

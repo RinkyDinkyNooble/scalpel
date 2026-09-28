@@ -52,6 +52,16 @@ public final class ScalpelForge {
                     .append(removed).append(" removed,");
         }
         summary.setLength(summary.length() - 1);
+        List<String> hidden = new java.util.ArrayList<>();
+        for (ContentType type : ContentType.REGISTRY_TYPES) {
+            int count = core.resolver().hiddenEntries(type).size();
+            if (count > 0) {
+                hidden.add(count + " " + (count == 1 ? type.keyword() : com.rinkynooble.scalpel.core.Report.plural(type)));
+            }
+        }
+        if (!hidden.isEmpty()) {
+            summary.append(core.settings().dryRun() ? ". Would hide: " : ". Hidden: ").append(String.join(", ", hidden));
+        }
         core.log().info(summary + ". Report: " + core.reportFile());
         List<Rule> unmatched = core.report().unmatchedRules(core.rules().rules());
         for (Rule rule : unmatched) {

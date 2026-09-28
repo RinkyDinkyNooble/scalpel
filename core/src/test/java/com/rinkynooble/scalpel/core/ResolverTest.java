@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -123,6 +124,59 @@ class ResolverTest {
 
         Resolver strict = resolver("redact item minecraft:stone");
         assertEquals(Action.PROTECTED, strict.decideBlock("minecraft:stone").action());
+    }
+
+    @Test
+    void hideSitsBetweenKeepAndRedact() {
+        Resolver r = resolver(
+                "remove any deco:*",
+                "redact item deco:lamp_*",
+                "hide item deco:lamp_*",
+                "keep item deco:lamp_red");
+        assertEquals(Action.REMOVE, r.decide(ContentType.ITEM, "deco:chair").action());
+        assertEquals(Action.HIDE, r.decide(ContentType.ITEM, "deco:lamp_blue").action());
+        assertEquals(Action.KEEP, r.decide(ContentType.ITEM, "deco:lamp_red").action());
+        assertFalse(r.decide(ContentType.ITEM, "deco:lamp_blue").isCut());
+    }
+
+    @Test
+    void hideIgnoresSoftProtectionAndTheVanillaGuard() {
+        Resolver r = resolver("hide item minecraft:enchanted_book", "hide item minecraft:air", "hide block minecraft:stone");
+        assertEquals(Action.HIDE, r.decide(ContentType.ITEM, "minecraft:enchanted_book").action());
+        assertEquals(Action.HIDE, r.decideBlock("minecraft:stone").action());
+        assertEquals(Action.PROTECTED, r.decide(ContentType.ITEM, "minecraft:air").action());
+    }
+
+    @Test
+    void hiddenIdsAreNotCut() {
+        Resolver r = resolver("hide item deco:lamp");
+        Decision d = r.decide(ContentType.ITEM, "deco:lamp");
+        r.markCut(ContentType.ITEM, "deco:lamp", d);
+        r.markHidden(ContentType.ITEM, "deco:lamp", d);
+        assertTrue(r.isHidden(ContentType.ITEM, "deco:lamp"));
+        assertFalse(r.isCut(ContentType.ITEM, "deco:lamp"));
+        assertFalse(r.isCutAnywhere("deco:lamp"));
+        assertTrue(r.cutIds(ContentType.ITEM).isEmpty());
+    }
+
+    @Test
+    void blockItemAndSpawnEggFollowHide() {
+        Resolver r = resolver("hide block deco:lamp", "hide entity mobs:blob", "hide entity mobs:slime");
+        r.markHidden(ContentType.BLOCK, "deco:lamp", r.decideBlock("deco:lamp"));
+        Decision item = r.decideItem("deco:lamp", List.of("deco:lamp"), null);
+        assertEquals(Action.HIDE, item.action());
+        assertTrue(item.note().contains("places block deco:lamp"));
+
+        r.markHidden(ContentType.ENTITY, "mobs:blob", r.decideEntity("mobs:blob"));
+        assertEquals(Action.HIDE, r.decideItem("mobs:blob_spawn_egg", List.of(), "mobs:blob").action());
+        // Decided before its entity, as Forge registers items first.
+        assertEquals(Action.HIDE, r.decideItem("mobs:slime_spawn_egg", List.of(), "mobs:slime").action());
+    }
+
+    @Test
+    void hiddenItemDoesNotHideItsBlock() {
+        Resolver r = resolver("hide item deco:lamp");
+        assertEquals(Action.NONE, r.decideBlock("deco:lamp").action());
     }
 
     @Test

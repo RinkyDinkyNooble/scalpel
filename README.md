@@ -2,7 +2,7 @@
 
 Scalpel is a Forge mod for modpack makers. You write rules listing the items, blocks and entities you don't want, and Scalpel cuts them out while the game loads. Their recipes, tags, loot, advancements, world generation and structure pieces go with them.
 
-Hiding content (removing recipes, hiding it in JEI) still leaves it loaded. Scalpel stops it from loading at all, so a pack can include a big decoration or palette mod and only pay for the parts it keeps.
+Hiding content (removing recipes, hiding it in JEI) still leaves it loaded. Scalpel stops it from loading at all, so a pack can include a big decoration or palette mod and only pay for the parts it keeps. For content that should keep working but stay out of sight, Scalpel can also just hide it.
 
 > **Existing worlds can break.** Blocks that are cut from a world that already has them turn into air or placeholders. Add Scalpel and your rules before a world is created, and treat rule changes like adding or removing a mod.
 
@@ -14,7 +14,7 @@ Hiding content (removing recipes, hiding it in JEI) still leaves it loaded. Scal
 
 - [Quick start](#quick-start)
 - [Rules files](#rules-files)
-- [Redact or remove](#redact-or-remove)
+- [Remove, redact or hide](#remove-redact-or-hide)
 - [What else gets cleaned up](#what-else-gets-cleaned-up)
 - [Recipes that use cut content](#recipes-that-use-cut-content)
 - [Vanilla content](#vanilla-content)
@@ -51,15 +51,17 @@ Every `*.rules` file in `config/scalpel/` is loaded, in alphabetical order. Use 
 | Verb | What it does |
 |---|---|
 | `keep` | Protects matching ids from every other rule. |
+| `hide` | Leaves the content in the game, working as normal, but takes it out of JEI, EMI and the creative tabs. |
 | `redact` | Replaces the content with a blank "Redacted" placeholder. This is the safe choice. |
 | `remove` | The content never loads. Saves the most, but some mods expect their content to exist. |
 
-When several rules match the same id, `keep` wins over `redact`, and `redact` wins over `remove`. Order in the files doesn't matter. That makes this pattern work:
+When several rules match the same id, the gentler one wins: `keep` beats `hide`, `hide` beats `redact`, and `redact` beats `remove`. Order in the files doesn't matter. That makes this pattern work:
 
 ```
 remove any  palettemod:*
 keep   block palettemod:red_bricks
 keep   block palettemod:blue_bricks
+hide   any  palettemod:*_debug
 ```
 
 ### Types
@@ -75,7 +77,7 @@ keep   block palettemod:blue_bricks
 | `advancement` | advancement ids |
 | `tag` | tag ids (items, blocks and entities) |
 
-Recipes, loot tables, advancements and tags can only be kept or removed. Removing a tag empties it.
+Recipes, loot tables, advancements and tags can only be kept or removed. Removing a tag empties it. Only items, blocks and entities can be hidden or redacted.
 
 ### Patterns
 
@@ -99,7 +101,7 @@ remove item examplemod:ruby rewrite
 
 Lines with mistakes are skipped, and each one is listed at the top of the report with its file and line number.
 
-## Redact or remove
+## Remove, redact or hide
 
 **Redact** keeps the id but registers a placeholder under it: a plain block or item with a "redacted document" texture, the name "Redacted" and a tooltip that says which id it replaced. It has no behaviour, no creative tab entry, and it's hidden in JEI and EMI. The only way to get one is `/give`. The original mod's block, item or entity is never created and its models are never loaded. Mods that look up their own content by id still find something, so redact rarely crashes anything.
 
@@ -107,14 +109,17 @@ A redacted entity shows up as a floating "Redacted" label. It can't be summoned 
 
 **Remove** means the id doesn't exist at all: `/give` fails and nothing refers to it. When a mod's own setup code still asks for a removed block or entity, it gets an unregistered stand-in instead of crashing. Removed items all point to one hidden item, `scalpel:removed`, because items have to be registered to exist in an inventory.
 
+**Hide** doesn't change the content at all. It stays registered as itself and works as before, with its recipes, loot, tags, trades and world generation. It's only left out of JEI, EMI and the creative tabs, including the search tab. Players can still craft it, find it in loot, or get it with `/give`. Because nothing is registered differently, hiding is safe to add to or take out of an existing world. Protected ids (see [Vanilla content](#vanilla-content)) can be hidden too.
+
 Linked content follows along:
 - Cutting a block also cuts the item that places it.
 - Cutting an item also cuts the block with the same id.
 - Cutting an entity also cuts its spawn egg.
+- Hiding a block or an entity also hides the item that places or spawns it.
 
 ## What else gets cleaned up
 
-For everything that is cut, whether redacted or removed:
+For everything that is cut, whether redacted or removed (hidden content is left alone, apart from creative tabs, JEI and EMI):
 
 - **Recipes** that make it are removed. Recipes that use it are removed or rewritten.
 - **Tags** lose it. A tag left empty by a cut is tracked, so recipes that use that tag are handled too.
@@ -142,9 +147,9 @@ Recipes that scripts add (KubeJS, CraftTweaker) are also checked. Scalpel can re
 
 Vanilla code keeps direct references to its own blocks, items and entities, so Scalpel treats `minecraft:` content differently:
 
-- `redact` hides vanilla content instead of replacing it. It stays registered as itself, but it's removed from recipes, tags, loot, world generation, structures, creative tabs, trades and recipe viewers. The tooltip says "Hidden by Scalpel".
+- `redact` doesn't replace vanilla content. It stays registered as itself, but it's removed from recipes, tags, loot, world generation, structures, creative tabs, trades and recipe viewers. The tooltip says "Redacted by Scalpel". To keep vanilla content working and only get it out of sight, use `hide`.
 - `remove` on vanilla content acts like `redact`, unless you set `allowRemovingVanilla = true`. Removing vanilla content can crash the game.
-- A few ids are protected, such as stone, water, fire, portals, enchanted books and item entities. Set `protectCriticalIds = false` to allow cutting them. Air and the player can never be cut.
+- A few ids are protected, such as stone, water, fire, portals, enchanted books and item entities. Set `protectCriticalIds = false` to allow cutting them. Air and the player can never be cut. Hiding a protected id is always allowed.
 
 ## Settings
 
@@ -180,6 +185,7 @@ For operators (permission level 2). Suggestions work for every id argument.
 - the rules hash, the settings, and any rule errors
 - each rule with how many ids it matched, and rules that matched nothing (usually a typo, or an id a mod update renamed)
 - everything cut, grouped by mod
+- everything hidden, grouped by mod
 - every data change, grouped by mod
 - items that lost every recipe because of what was cut, a few levels deep (report only, nothing there is cut)
 
@@ -194,7 +200,7 @@ Rules files live in `config/`, so they ship with the pack like any other config.
 ## A safe way to work
 
 1. Write the rules and start with `dryRun = true`. Read the report.
-2. Start with `redact`. Play a bit and check the log for errors.
+2. Start with `redact`, or `hide` for anything you want to keep working. Play a bit and check the log for errors.
 3. Use `/scalpel find <id>` on things you'd like to remove. If only recipes, tags and loot mention them, switch those rules to `remove`. If a config file or another mod's data names them (a Lost Cities palette, for example), keep using `redact` or change that file first.
 4. Keep an eye on "Unmatched rules" in the report after mod updates.
 
@@ -210,6 +216,7 @@ Rules files live in `config/`, so they ship with the pack like any other config.
 - Existing worlds with cut content in them can break.
 - A mod that casts its own registry entry to its own class will crash with `redact`. This is common in tech mods and rare in decoration mods. Remove the whole mod's content instead, or keep that entry.
 - Textures of cut blocks and items are still stitched into the texture atlas. Models are skipped.
+- Hiding covers JEI, EMI and the creative tabs. The vanilla recipe book still shows recipes that make a hidden item.
 - LootJS applies its changes after every global loot modifier, Scalpel's included. A cut item that a LootJS script adds to loot can still drop. Items that mod code spawns directly, without a loot table, are not checked either.
 
 ## Building
