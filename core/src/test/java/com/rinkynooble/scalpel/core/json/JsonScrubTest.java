@@ -52,6 +52,61 @@ class JsonScrubTest {
     }
 
     @Test
+    void bareNamesCanBeIgnored() {
+        assertNull(JsonScrub.asId("dead_bush", JsonScrub.BareNames.IGNORED));
+        assertNull(JsonScrub.asId("dead_bush[age=1]", JsonScrub.BareNames.IGNORED));
+        assertEquals("deco:lamp", JsonScrub.asId("deco:lamp[lit=true]", JsonScrub.BareNames.IGNORED));
+        assertEquals("minecraft:dead_bush", JsonScrub.asId("minecraft:dead_bush", JsonScrub.BareNames.IGNORED));
+    }
+
+    @Test
+    void modDataKeepsItsOwnBareNames() {
+        // Lost Cities' building7: "variant": "blackstone" is its own variant, "damaged" is a real block.
+        String text = "{'palette':[{'char':'#','variant':'dead_bush','damaged':'minecraft:dead_bush'},{'char':'l','block':'deco:lamp'}]}";
+        JsonObject vanillaRead = json(text);
+        assertEquals(Set.of("minecraft:dead_bush", "deco:lamp"), JsonScrub.replaceReferences(vanillaRead, CUT, "minecraft:air"));
+        assertEquals("minecraft:air", vanillaRead.getAsJsonArray("palette").get(0).getAsJsonObject().get("variant").getAsString());
+
+        JsonObject modRead = json(text);
+        Set<String> replaced = JsonScrub.replaceReferences(modRead, CUT, "minecraft:air", JsonScrub.BareNames.IGNORED, key -> true);
+        assertEquals(Set.of("minecraft:dead_bush", "deco:lamp"), replaced);
+        JsonObject hash = modRead.getAsJsonArray("palette").get(0).getAsJsonObject();
+        assertEquals("dead_bush", hash.get("variant").getAsString());
+        assertEquals("minecraft:air", hash.get("damaged").getAsString());
+        assertEquals("minecraft:air", modRead.getAsJsonArray("palette").get(1).getAsJsonObject().get("block").getAsString());
+        assertEquals(Set.of("minecraft:dead_bush"), JsonScrub.findBareReferences(modRead, CUT));
+    }
+
+    @Test
+    void vanillaFormatOnlyReplacesBlockStates() {
+        // The warped forest lists the placed feature minecraft:nether_sprouts, which shares the block's id. Air there
+        // would point at a feature that doesn't exist; only block states ({"Name": ...}) become air, scrub() does the rest.
+        JsonObject file = json("{'features':[[],['minecraft:dead_bush','minecraft:ore_iron']],"
+                + "'default_block':{'Name':'minecraft:dead_bush'},"
+                + "'surface_rule':{'type':'minecraft:block','result_state':{'Name':'deco:lamp','Properties':{'lit':'true'}}}}");
+        Set<String> replaced = JsonScrub.replaceReferences(file, CUT, "minecraft:air", JsonScrub.BareNames.VANILLA, "Name"::equals);
+        assertEquals(Set.of("minecraft:dead_bush", "deco:lamp"), replaced);
+        assertEquals("minecraft:air", file.getAsJsonObject("default_block").get("Name").getAsString());
+        assertEquals("minecraft:air", file.getAsJsonObject("surface_rule").getAsJsonObject("result_state").get("Name").getAsString());
+        assertEquals("minecraft:dead_bush", file.getAsJsonArray("features").get(1).getAsJsonArray().get(0).getAsString());
+
+        JsonScrub.Result result = JsonScrub.scrub(file, CUT, LOOT);
+        assertFalse(result.dropWhole());
+        assertEquals(1, result.removed());
+        assertEquals("minecraft:ore_iron", file.getAsJsonArray("features").get(1).getAsJsonArray().get(0).getAsString());
+    }
+
+    @Test
+    void scrubCanIgnoreBareNames() {
+        JsonObject spawns = json("{'mobs':[{'type':'dead_bush'},{'type':'minecraft:dead_bush'},{'type':'mobs:blob'}]}");
+        JsonScrub.Result result = JsonScrub.scrub(spawns, CUT, LOOT, JsonScrub.BareNames.IGNORED);
+        assertEquals(2, result.removed());
+        assertEquals(1, spawns.getAsJsonArray("mobs").size());
+        assertEquals("dead_bush", spawns.getAsJsonArray("mobs").get(0).getAsJsonObject().get("type").getAsString());
+        assertTrue(JsonScrub.findBareReferences(json("{'a':'deco:lamp','b':'#dead_bush','c':'stone'}"), CUT).isEmpty());
+    }
+
+    @Test
     void findsBareVanillaNames() {
         assertEquals(Set.of("minecraft:dead_bush"), JsonScrub.findReferences(json("{'item':'dead_bush'}"), CUT));
         assertFalse(JsonScrub.references(json("{'tag':'#deco:lamp'}"), CUT));

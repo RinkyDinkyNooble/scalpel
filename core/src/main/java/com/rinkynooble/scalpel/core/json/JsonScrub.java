@@ -16,8 +16,8 @@ import java.util.function.Predicate;
  * Finds and removes references to cut ids inside data JSON (recipes, loot tables, worldgen, ...).
  *
  * <p>A reference is any string value (or object key) equal to a cut id. Bare names such as {@code "stone"}
- * are read as {@code minecraft:stone}, the same way the game reads them. Strings starting with {@code #} are
- * tag references and are ignored.
+ * are read as {@code minecraft:stone}, the same way the game reads them, unless the caller passes
+ * {@link BareNames#IGNORED}. Strings starting with {@code #} are tag references and are ignored.
  *
  * <p>Removal takes out the smallest array element that contains the reference: one entry of a loot pool,
  * one ore target, one alternative of an ingredient. Arrays under names in {@link Policy#escalatePast()}
@@ -41,6 +41,17 @@ public final class JsonScrub {
     public record Policy(EmptyArrays emptyArrays, Set<String> escalatePast) {
     }
 
+    /** How a string without a namespace, such as {@code "stone"}, is read. */
+    public enum BareNames {
+        /** As {@code minecraft:stone}, the way vanilla codecs read ids. Right for vanilla-format data. */
+        VANILLA,
+        /**
+         * Not as an id. Mods' own data often names its own content this way: Lost Cities'
+         * {@code "variant": "blackstone"} is its variant {@code lostcities:blackstone}, not the block.
+         */
+        IGNORED
+    }
+
     /**
      * @param dropWhole true when the file cannot be fixed by removing parts of it
      * @param removed   how many elements or keys were removed
@@ -58,6 +69,11 @@ public final class JsonScrub {
      * references to the id before the bracket.
      */
     public static String asId(String value) {
+        return asId(value, BareNames.VANILLA);
+    }
+
+    /** {@link #asId(String)}, with bare names read as {@code bare} says. */
+    public static String asId(String value, BareNames bare) {
         if (value.isEmpty() || value.charAt(0) == '#' || value.length() > 256) {
             return null;
         }
@@ -70,6 +86,9 @@ public final class JsonScrub {
         }
         int colon = value.indexOf(':');
         if (colon < 0) {
+            if (bare == BareNames.IGNORED) {
+                return null;
+            }
             for (int i = 0; i < value.length(); i++) {
                 char c = value.charAt(i);
                 if (!((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' || c == '/' || c == '.' || c == '-')) {
@@ -97,34 +116,75 @@ public final class JsonScrub {
      * @return the cut ids that were replaced
      */
     public static Set<String> replaceReferences(JsonElement root, Predicate<String> isCut, String replacement) {
+        return replaceReferences(root, isCut, replacement, BareNames.VANILLA, key -> true);
+    }
+
+    /**
+     * {@link #replaceReferences(JsonElement, Predicate, String)}, with bare names read as {@code bare} says, and only
+     * for values whose object key passes {@code atKey} (array elements are tested with a null key). Vanilla writes a
+     * placed block as a block state, {@code {"Name": "minecraft:stone"}}, so {@code "Name"::equals} limits the
+     * replacement to those.
+     */
+    public static Set<String> replaceReferences(JsonElement root, Predicate<String> isCut, String replacement,
+                                                BareNames bare, Predicate<String> atKey) {
         Set<String> replaced = new LinkedHashSet<>();
-        replaceIn(root, isCut, replacement, replaced);
+        replaceIn(root, isCut, replacement, bare, atKey, replaced);
         return replaced;
     }
 
-    private static void replaceIn(JsonElement element, Predicate<String> isCut, String replacement, Set<String> replaced) {
+    private static void replaceIn(JsonElement element, Predicate<String> isCut, String replacement, BareNames bare,
+                                  Predicate<String> atKey, Set<String> replaced) {
         if (element.isJsonArray()) {
             JsonArray array = element.getAsJsonArray();
+            boolean here = atKey.test(null);
             for (int i = 0; i < array.size(); i++) {
                 JsonElement child = array.get(i);
-                String id = child.isJsonPrimitive() ? idIfCut(child.getAsJsonPrimitive(), isCut) : null;
+                String id = here && child.isJsonPrimitive() ? idIfCut(child.getAsJsonPrimitive(), isCut, bare) : null;
                 if (id != null) {
                     replaced.add(id);
                     array.set(i, new JsonPrimitive(replacement));
                 } else {
-                    replaceIn(child, isCut, replacement, replaced);
+                    replaceIn(child, isCut, replacement, bare, atKey, replaced);
                 }
             }
         } else if (element.isJsonObject()) {
             for (Map.Entry<String, JsonElement> entry : element.getAsJsonObject().entrySet()) {
                 JsonElement child = entry.getValue();
-                String id = child.isJsonPrimitive() ? idIfCut(child.getAsJsonPrimitive(), isCut) : null;
+                String id = child.isJsonPrimitive() && atKey.test(entry.getKey())
+                        ? idIfCut(child.getAsJsonPrimitive(), isCut, bare) : null;
                 if (id != null) {
                     replaced.add(id);
                     entry.setValue(new JsonPrimitive(replacement));
                 } else {
-                    replaceIn(child, isCut, replacement, replaced);
+                    replaceIn(child, isCut, replacement, bare, atKey, replaced);
                 }
+            }
+        }
+    }
+
+    /**
+     * Cut ids that {@code root} names by a bare name, such as {@code "blackstone"} for {@code minecraft:blackstone}:
+     * the references {@link BareNames#IGNORED} leaves alone, so the caller can report them.
+     */
+    public static Set<String> findBareReferences(JsonElement root, Predicate<String> isCut) {
+        Set<String> found = new LinkedHashSet<>();
+        collectBare(root, isCut, found);
+        return found;
+    }
+
+    private static void collectBare(JsonElement element, Predicate<String> isCut, Set<String> found) {
+        if (element.isJsonPrimitive()) {
+            String id = idIfCut(element.getAsJsonPrimitive(), isCut, BareNames.VANILLA);
+            if (id != null && idIfCut(element.getAsJsonPrimitive(), isCut, BareNames.IGNORED) == null) {
+                found.add(id);
+            }
+        } else if (element.isJsonArray()) {
+            for (JsonElement child : element.getAsJsonArray()) {
+                collectBare(child, isCut, found);
+            }
+        } else if (element.isJsonObject()) {
+            for (Map.Entry<String, JsonElement> entry : element.getAsJsonObject().entrySet()) {
+                collectBare(entry.getValue(), isCut, found);
             }
         }
     }
@@ -137,12 +197,12 @@ public final class JsonScrub {
     }
 
     public static boolean references(JsonElement root, Predicate<String> isCut) {
-        return findFirst(root, isCut, new ArrayList<>()) != null;
+        return findFirst(root, isCut, BareNames.VANILLA, new ArrayList<>()) != null;
     }
 
     private static void collect(JsonElement element, Predicate<String> isCut, Set<String> found) {
         if (element.isJsonPrimitive()) {
-            String id = idIfCut(element.getAsJsonPrimitive(), isCut);
+            String id = idIfCut(element.getAsJsonPrimitive(), isCut, BareNames.VANILLA);
             if (id != null) {
                 found.add(id);
             }
@@ -161,11 +221,11 @@ public final class JsonScrub {
         }
     }
 
-    private static String idIfCut(JsonPrimitive primitive, Predicate<String> isCut) {
+    private static String idIfCut(JsonPrimitive primitive, Predicate<String> isCut, BareNames bare) {
         if (!primitive.isString()) {
             return null;
         }
-        String id = asId(primitive.getAsString());
+        String id = asId(primitive.getAsString(), bare);
         return id != null && isCut.test(id) ? id : null;
     }
 
@@ -177,16 +237,16 @@ public final class JsonScrub {
     private record Found(List<Step> path, String id, boolean isKey) {
     }
 
-    private static Found findFirst(JsonElement element, Predicate<String> isCut, List<Step> path) {
+    private static Found findFirst(JsonElement element, Predicate<String> isCut, BareNames bare, List<Step> path) {
         if (element.isJsonPrimitive()) {
-            String id = idIfCut(element.getAsJsonPrimitive(), isCut);
+            String id = idIfCut(element.getAsJsonPrimitive(), isCut, bare);
             return id == null ? null : new Found(new ArrayList<>(path), id, false);
         }
         if (element.isJsonArray()) {
             JsonArray array = element.getAsJsonArray();
             for (int i = 0; i < array.size(); i++) {
                 path.add(new Step(array, null, i));
-                Found found = findFirst(array.get(i), isCut, path);
+                Found found = findFirst(array.get(i), isCut, bare, path);
                 path.remove(path.size() - 1);
                 if (found != null) {
                     return found;
@@ -207,7 +267,7 @@ public final class JsonScrub {
                     }
                 }
                 path.add(new Step(object, key, -1));
-                Found found = findFirst(entry.getValue(), isCut, path);
+                Found found = findFirst(entry.getValue(), isCut, bare, path);
                 path.remove(path.size() - 1);
                 if (found != null) {
                     return found;
@@ -219,10 +279,15 @@ public final class JsonScrub {
 
     /** Removes every reference according to {@code policy}. Mutates {@code root}. */
     public static Result scrub(JsonElement root, Predicate<String> isCut, Policy policy) {
+        return scrub(root, isCut, policy, BareNames.VANILLA);
+    }
+
+    /** {@link #scrub(JsonElement, Predicate, Policy)}, with bare names read as {@code bare} says. */
+    public static Result scrub(JsonElement root, Predicate<String> isCut, Policy policy, BareNames bare) {
         Set<String> hits = new LinkedHashSet<>();
         int removed = 0;
         while (true) {
-            Found found = findFirst(root, isCut, new ArrayList<>());
+            Found found = findFirst(root, isCut, bare, new ArrayList<>());
             if (found == null) {
                 return new Result(false, removed, hits);
             }

@@ -8,7 +8,10 @@ import com.rinkynooble.scalpel.core.ScalpelCore;
 import com.rinkynooble.scalpel.core.json.JsonScrub;
 import com.rinkynooble.scalpel.forge.Scalpel;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraftforge.common.ForgeHooks;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 import java.util.function.Predicate;
 
@@ -25,10 +28,11 @@ public final class WorldgenFilter {
     }
 
     /**
-     * @param directory the registry folder, e.g. {@code worldgen/configured_feature} or {@code forge/biome_modifier}
-     * @param file      the file's resource location, e.g. {@code minecraft:worldgen/configured_feature/ore_iron.json}
+     * @param registry the registry, e.g. {@code minecraft:worldgen/configured_feature}, {@code forge:biome_modifier}
+     *                 or a mod's own such as {@code lostcities:buildings}
+     * @param file     the file's resource location, e.g. {@code minecraft:worldgen/configured_feature/ore_iron.json}
      */
-    public static JsonElement filter(String directory, ResourceLocation file, JsonElement json) {
+    public static JsonElement filter(ResourceLocation registry, ResourceLocation file, JsonElement json) {
         ScalpelCore core = Scalpel.core();
         Resolver resolver = core.resolver();
         if (json == null || !(hasCut(resolver, ContentType.BLOCK) || hasCut(resolver, ContentType.ENTITY))) {
@@ -38,6 +42,7 @@ public final class WorldgenFilter {
         if (!JsonScrub.references(json, isCut)) {
             return json;
         }
+        String directory = ForgeHooks.prefixNamespace(registry);
         String id = idOf(directory, file);
         JsonElement work = json.deepCopy();
         String replacement = null;
@@ -60,13 +65,29 @@ public final class WorldgenFilter {
                 replacement = "{\"type\":\"forge:none\"}";
             }
             default -> {
-                // Registries Scalpel doesn't know (mods' own, such as Lost Cities palettes and parts): removing an
-                // entry could break the file's own structure, so a cut block becomes air, like in structures.
-                java.util.Set<String> toAir = JsonScrub.replaceReferences(work, ref -> resolver.isCut(ContentType.BLOCK, ref), "minecraft:air");
+                // Everything else (biomes, noise settings, carvers, and mods' own registries such as Lost Cities
+                // palettes and parts): removing an entry could break the file's own structure, so a cut block
+                // becomes air, like in structures. What counts as a block depends on who wrote the format:
+                // - vanilla and Forge: only block states ({"Name": ...}). Other ids point into other registries and
+                //   some share a block's id (the warped forest lists the placed feature minecraft:nether_sprouts);
+                //   air there would point at nothing and the world would fail to load. scrub() takes those out of
+                //   their list instead.
+                // - a mod's own: any full id. Bare names are often the mod's own content (Lost Cities'
+                //   "variant": "blackstone" is lostcities:blackstone, not the block), so those are left alone and reported.
+                boolean vanillaFormat = isVanillaFormat(registry);
+                JsonScrub.BareNames bare = vanillaFormat ? JsonScrub.BareNames.VANILLA : JsonScrub.BareNames.IGNORED;
+                Predicate<String> atKey = vanillaFormat ? "Name"::equals : key -> true;
+                Set<String> toAir = JsonScrub.replaceReferences(work, ref -> resolver.isCut(ContentType.BLOCK, ref), "minecraft:air", bare, atKey);
                 if (!toAir.isEmpty()) {
                     DataFilter.change(core, "worldgen blocks replaced with air", id, directory + ": " + String.join(", ", toAir));
                 }
-                result = JsonScrub.scrub(work, isCut, KEEP);
+                if (bare == JsonScrub.BareNames.IGNORED) {
+                    Set<String> leftAlone = JsonScrub.findBareReferences(work, isCut);
+                    if (!leftAlone.isEmpty()) {
+                        DataFilter.change(core, "worldgen names left alone", id, directory + ": " + describeBare(leftAlone));
+                    }
+                }
+                result = JsonScrub.scrub(work, isCut, KEEP, bare);
                 if (!result.changed()) {
                     return core.applies() ? work : json;
                 }
@@ -88,6 +109,22 @@ public final class WorldgenFilter {
 
     private static boolean hasCut(Resolver resolver, ContentType type) {
         return !resolver.cutIds(type).isEmpty();
+    }
+
+    /** Vanilla's and Forge's registries are read by codecs that take a bare name as {@code minecraft:}. */
+    private static boolean isVanillaFormat(ResourceLocation registry) {
+        return registry.getNamespace().equals("minecraft") || registry.getNamespace().equals("forge");
+    }
+
+    /** {@code "blackstone" has no mod id, may be this mod's own name}, for the report. */
+    private static String describeBare(Set<String> ids) {
+        List<String> names = new ArrayList<>();
+        for (String id : ids) {
+            names.add("\"" + id.substring(id.indexOf(':') + 1) + "\"");
+        }
+        return String.join(", ", names) + (names.size() == 1
+                ? " has no mod id, may be this mod's own name"
+                : " have no mod id, may be this mod's own names");
     }
 
     private static String idOf(String directory, ResourceLocation file) {

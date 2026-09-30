@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.1 (2026-09-29)
+
+- Fixed a crash with Lost Cities when cutting `minecraft:blackstone`, `minecraft:bricks` or `minecraft:deepslate`. Lost Cities has building variants with those names, written without a mod id. Scalpel took them for the vanilla blocks and replaced them with air, so Lost Cities crashed when the world loaded.
+- Fixed servers not starting ("Failed to load datapacks") when a cut block has the same id as a vanilla world generation feature, such as `minecraft:nether_sprouts`, `minecraft:glow_lichen` or `minecraft:bamboo`. Biomes list those features by id, and Scalpel replaced the ids with air.
+- In vanilla world generation files, only the blocks a file places now turn into air. Other ids that match a cut block, such as a feature in a biome or a noise in the surface rules, are taken out of their list instead.
+- In another mod's own data, such as Lost Cities buildings and palettes, only full ids like `minecraft:stone` now count as blocks. Scalpel leaves names without a mod id as they are, and lists the ones that match something you cut in the report under "worldgen names left alone".
+
 ## 0.2.0 (2026-09-28)
 
 - New `hide` verb. Hidden items, blocks and entities stay in the game and keep working, with their recipes, loot, tags, trades and world generation, but they're left out of JEI, EMI and the creative tabs, including the search tab. When rules overlap, the gentler one wins: `keep`, then `hide`, then `redact`, then `remove`.
