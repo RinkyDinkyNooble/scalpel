@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.2 (2026-10-01)
+
+- Removing advancements no longer crashes the server when a mod awards them from code. Many mods (most made with MCreator) look an advancement up by id and pass it on without checking that it exists, so the first time a player earned one that a rule had removed, the server crashed. A missing advancement now does nothing.
+
 ## 0.2.1 (2026-09-29)
 
 - Fixed a crash with Lost Cities when cutting `minecraft:blackstone`, `minecraft:bricks` or `minecraft:deepslate`. Lost Cities has building variants with those names, written without a mod id. Scalpel took them for the vanilla blocks and replaced them with air, so Lost Cities crashed when the world loaded.

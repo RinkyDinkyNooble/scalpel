@@ -12,6 +12,7 @@
     "LootModifierManagerMixin",
     "MappedRegistryAccessor",
     "NbtUtilsMixin",
+    "PlayerAdvancementsMixin",
     "RegisterEventMixin",
     "RegistryDataLoaderMixin",
     "RegistryObjectMixin",

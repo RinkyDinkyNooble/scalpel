@@ -126,7 +126,7 @@ For everything that is cut, whether redacted or removed (hidden content is left 
 - **Loot tables** lose the entries that drop it. A cut block's or entity's own loot table goes.
 - **Generated loot**: cut items never drop, even when a loot function creates them. Vanilla loot tables list a plain book and enchant it as it drops, so Scalpel also checks the finished drops with its own loot modifier, `scalpel:strip_cut_items`. It runs after every other global loot modifier.
 - **Loot modifiers** that mention it are removed.
-- **Advancements** that mention it are removed, along with their children.
+- **Advancements** that mention it are removed, along with their children. Removing advancements is safe even when a mod awards them from code: a missing advancement does nothing.
 - **World generation**: ore targets and spawn entries that mention it are taken out. A feature that can't work without it is switched off. In other vanilla world generation files, such as biomes and noise settings, the blocks a file places become air, and other ids that match a cut block (a feature in a biome's list, for example) are taken out of their list. In other mods' world generation data, such as Lost Cities palettes and building parts, a cut block becomes air. Only full ids like `minecraft:stone` count there, because mods often use names without a mod id for their own things (Lost Cities has a building variant called `blackstone`). Scalpel leaves those names as they are and lists the ones that match something you cut in the report.
 - **Structures** place air where a cut block was, and leave out cut entities.
 - **Creative tabs** and **villager and wandering trader trades** leave it out.
