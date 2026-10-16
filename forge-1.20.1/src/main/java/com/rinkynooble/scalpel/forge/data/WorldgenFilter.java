@@ -3,6 +3,7 @@ package com.rinkynooble.scalpel.forge.data;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 import com.rinkynooble.scalpel.core.ContentType;
+import com.rinkynooble.scalpel.core.Decision;
 import com.rinkynooble.scalpel.core.Resolver;
 import com.rinkynooble.scalpel.core.ScalpelCore;
 import com.rinkynooble.scalpel.core.json.JsonScrub;
@@ -99,8 +100,14 @@ public final class WorldgenFilter {
             return core.applies() ? work : json;
         }
         if (replacement == null) {
-            core.warn("worldgen " + directory + " " + id + " uses cut " + hits + " and cannot be fixed automatically. "
-                    + "The world may fail to load; remove it from the datapack or keep " + hits + ".");
+            if (anyRemoved(resolver, result.hits())) {
+                core.warn("worldgen " + directory + " " + id + " uses cut " + hits + " and cannot be fixed automatically. "
+                        + "The world may fail to load; remove it from the datapack or keep " + hits + ".");
+            } else {
+                // Redacted ids stay registered (vanilla ones as themselves, modded ones as placeholders), so the file
+                // still loads; the match is often only a name (falling_anvil's message_id "anvil").
+                core.log().detail("worldgen " + directory + " " + id + " names cut " + hits + ", left as it is: still registered");
+            }
             return json;
         }
         DataFilter.change(core, "worldgen disabled", id, directory + ": uses " + hits);
@@ -109,6 +116,19 @@ public final class WorldgenFilter {
 
     private static boolean hasCut(Resolver resolver, ContentType type) {
         return !resolver.cutIds(type).isEmpty();
+    }
+
+    /** True when one of the ids is really gone from its registry (removed, not redacted). */
+    private static boolean anyRemoved(Resolver resolver, Set<String> ids) {
+        for (String id : ids) {
+            for (ContentType type : new ContentType[]{ContentType.BLOCK, ContentType.ENTITY}) {
+                Decision decision = resolver.cutState(type, id);
+                if (decision != null && decision.action() == Decision.Action.REMOVE) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /** Vanilla's and Forge's registries are read by codecs that take a bare name as {@code minecraft:}. */

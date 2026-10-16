@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.2.3 (2026-10-16)
+
+- Recipes of other mods' own types, such as TaCZ's gun smith table and Mekanism's machines, are now removed when they need a tag that your cuts left empty. TaCZ's crafting screen crashed on them. This happens in either recipe mode, since Scalpel can only rewrite crafting recipes. The report lists each one, and a `keep recipe` rule keeps it (with a warning).
+- Redacted blocks now have the same block states as the block they replace, so code and resource files that read those states by name keep working. SecurityCraft's secure redstone interface and ResourcefulLib's highlights for Ad Astra's radio crashed on the placeholder before.
+- Fixed a crash when opening the creative inventory ("The stack count must be 1") after removing a block that a mod adds to its creative tab in code. MCreator mods do this.
+- Fixed a client crash at startup ("No delegate exists for value") after cutting a modded mob that has a spawn egg.
+- The report has a new section for redacted blocks and items that were one of a mod's own classes. That mod's code may expect its own class and crash on the placeholder. If a crash names one of them, hide it instead of redacting it.
+- A creative tab whose icon item is cut now shows its first remaining item instead of a blank button.
+- The report no longer warns that a world "may fail to load" because of content that stays registered, such as redacted blocks or cut vanilla content. The falling anvil damage type and Moonlight's soft fluids set off this warning.
+- "Lost every recipe" in the report now counts every item a recipe makes, not just the first. Farmer's Delight's tree bark was listed there by mistake.
+- Vanilla's special crafting recipes don't say what they make. They're now removed when everything they make is cut: suspicious stew, tipped arrows, map and book copying, shield decoration, decorated pots, armor dyeing, banner copying, shulker box dyeing and fading firework stars.
+- Enchanted books are no longer protected, so cutting them doesn't need `protectCriticalIds = false` anymore.
+
 ## 0.2.2 (2026-10-01)
 
 - Removing advancements no longer crashes the server when a mod awards them from code. Many mods (most made with MCreator) look an advancement up by id and pass it on without checking that it exists, so the first time a player earned one that a rule had removed, the server crashed. A missing advancement now does nothing.

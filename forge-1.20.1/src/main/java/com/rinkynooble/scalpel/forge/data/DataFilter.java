@@ -8,6 +8,7 @@ import com.rinkynooble.scalpel.core.RecipeMode;
 import com.rinkynooble.scalpel.core.Resolver;
 import com.rinkynooble.scalpel.core.ScalpelCore;
 import com.rinkynooble.scalpel.core.json.JsonScrub;
+import com.rinkynooble.scalpel.core.json.RecipeIngredients;
 import com.rinkynooble.scalpel.core.json.RecipeRewriter;
 import com.rinkynooble.scalpel.forge.Scalpel;
 import net.minecraft.resources.ResourceLocation;
@@ -34,6 +35,11 @@ public final class DataFilter {
     private static final Set<String> lostProducers = ConcurrentHashMap.newKeySet();
     /** Recipe ids that came from files, so the final pass knows which recipes scripts added. */
     private static final Set<String> scannedRecipes = ConcurrentHashMap.newKeySet();
+    /**
+     * Every output a recipe file names, for recipes with more than one (Farmer's Delight's cutting board makes a log
+     * and tree bark). A built recipe only shows its first; the cascade report needs them all.
+     */
+    private static final Map<String, Set<String>> moreOutputs = new ConcurrentHashMap<>();
     /** Loot modifier files dropped by this load, which Forge's index must skip. */
     private static final Set<ResourceLocation> droppedLootModifiers = ConcurrentHashMap.newKeySet();
 
@@ -43,6 +49,7 @@ public final class DataFilter {
     public static void beginDataLoad() {
         lostProducers.clear();
         scannedRecipes.clear();
+        moreOutputs.clear();
         droppedLootModifiers.clear();
         TagFilter.reset();
         CutLoot.reset();
@@ -55,6 +62,11 @@ public final class DataFilter {
 
     public static boolean wasScanned(String recipeId) {
         return scannedRecipes.contains(recipeId);
+    }
+
+    /** The outputs a recipe's file names, when it names more than one; empty otherwise. */
+    public static Set<String> outputsNamed(String recipeId) {
+        return moreOutputs.getOrDefault(recipeId, Set.of());
     }
 
     public static boolean isDroppedLootModifier(ResourceLocation id) {
@@ -85,6 +97,14 @@ public final class DataFilter {
         if (!anyCut && !resolver.rules().hasRulesFor(ContentType.RECIPE)) {
             core.report().evaluated(Set.of(ContentType.RECIPE));
             return;
+        }
+        if (core.settings().cascadeDepth() > 0) {
+            for (Map.Entry<ResourceLocation, JsonElement> entry : files.entrySet()) {
+                Set<String> outputs = outputIds(entry.getValue());
+                if (outputs.size() > 1) {
+                    moreOutputs.put(entry.getKey().toString(), outputs);
+                }
+            }
         }
         Predicate<String> isCut = id -> resolver.isCut(ContentType.ITEM, id);
         Iterator<Map.Entry<ResourceLocation, JsonElement>> it = files.entrySet().iterator();
@@ -131,6 +151,59 @@ public final class DataFilter {
         core.report().evaluated(Set.of(ContentType.RECIPE));
     }
 
+    /**
+     * Recipe types whose built recipes show their vanilla ingredients, so the final recipe pass reads them after every
+     * script ran (and can rewrite crafting recipes). Every other type is checked here, from its file.
+     */
+    private static final Set<String> READ_BY_FINAL_PASS = Set.of("minecraft:crafting_shaped", "minecraft:crafting_shapeless",
+            "minecraft:smelting", "minecraft:blasting", "minecraft:smoking", "minecraft:campfire_cooking",
+            "minecraft:stonecutting");
+
+    /**
+     * Called at the start of {@code RecipeManager#apply}, when tags are known (every reload listener has prepared by
+     * then) and before scripts change recipes. A recipe of a type Scalpel has no model for, such as TaCZ's gun smith
+     * table or Mekanism's machines, keeps an ingredient whose tag the cuts emptied; the mod then shows or matches an
+     * ingredient with no items, and TaCZ's screen divided by it. Those recipes are dropped, whatever the recipe mode,
+     * since only crafting recipes can be rewritten.
+     */
+    public static void beforeRecipeApply(Map<ResourceLocation, JsonElement> recipes) {
+        Set<String> emptied = TagFilter.emptiedItemTags();
+        if (emptied.isEmpty()) {
+            return;
+        }
+        ScalpelCore core = Scalpel.core();
+        Resolver resolver = core.resolver();
+        Predicate<String> isCut = id -> resolver.isCut(ContentType.ITEM, id);
+        Iterator<Map.Entry<ResourceLocation, JsonElement>> it = recipes.entrySet().iterator();
+        while (it.hasNext()) {
+            Map.Entry<ResourceLocation, JsonElement> entry = it.next();
+            if (!entry.getValue().isJsonObject()) {
+                continue;
+            }
+            JsonObject json = entry.getValue().getAsJsonObject();
+            String type = json.has("type") && json.get("type").isJsonPrimitive() ? JsonScrub.asId(json.get("type").getAsString()) : null;
+            if (type == null || READ_BY_FINAL_PASS.contains(type) || type.equals("forge:conditional")) {
+                continue;
+            }
+            Set<String> dead = RecipeIngredients.deadTags(json, isCut, emptied::contains);
+            if (dead.isEmpty()) {
+                continue;
+            }
+            String id = entry.getKey().toString();
+            String needs = "#" + String.join(", #", dead);
+            Decision rule = resolver.decide(ContentType.RECIPE, id);
+            if (rule.action() == Decision.Action.KEEP) {
+                core.warn("recipe " + id + " is kept by " + rule.rule().location() + " but needs " + needs + ", which the cuts emptied");
+                continue;
+            }
+            change(core, "recipe dropped", id, "needs " + needs + " (emptied by cuts)");
+            lostOutputs(json);
+            if (core.applies()) {
+                it.remove();
+            }
+        }
+    }
+
     /** Rewrite only when every cut item the recipe uses asks for it; otherwise drop. */
     private static RecipeMode modeFor(ScalpelCore core, Set<String> refs) {
         for (String ref : refs) {
@@ -143,15 +216,21 @@ public final class DataFilter {
     }
 
     private static void lostOutputs(JsonElement recipe) {
-        if (!recipe.isJsonObject()) {
-            return;
-        }
-        for (String key : new String[]{"result", "results", "output", "outputs"}) {
-            JsonElement result = recipe.getAsJsonObject().get(key);
-            if (result != null) {
-                collectIds(result, lostProducers);
+        lostProducers.addAll(outputIds(recipe));
+    }
+
+    /** Item ids under a recipe's output keys: result(s), output(s), and mods' own such as Mekanism's secondaryOutput. */
+    private static Set<String> outputIds(JsonElement recipe) {
+        Set<String> ids = new HashSet<>();
+        if (recipe.isJsonObject()) {
+            for (Map.Entry<String, JsonElement> entry : recipe.getAsJsonObject().entrySet()) {
+                String key = entry.getKey().toLowerCase(java.util.Locale.ROOT);
+                if (key.contains("result") || key.contains("output")) {
+                    collectIds(entry.getValue(), ids);
+                }
             }
         }
+        return ids;
     }
 
     private static void collectIds(JsonElement element, Set<String> out) {

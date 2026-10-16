@@ -31,7 +31,12 @@ public final class Report {
     public record Change(String category, String target, String detail) {
     }
 
+    /** A redacted entry whose original was a mod's own class, which that mod's code may cast to. */
+    public record ModClassEntry(ContentType type, String id, String owner, String className) {
+    }
+
     private final Collection<CutEntry> cuts = new ConcurrentLinkedQueue<>();
+    private final Collection<ModClassEntry> modClasses = new ConcurrentLinkedQueue<>();
     private final Collection<CutEntry> protectedHits = new ConcurrentLinkedQueue<>();
     private final Collection<CutEntry> hidden = new ConcurrentLinkedQueue<>();
     private final Set<String> warnings = Collections.synchronizedSet(new LinkedHashSet<>());
@@ -50,6 +55,14 @@ public final class Report {
 
     public void hidden(ContentType type, String id, String owner, Decision decision) {
         hidden.add(new CutEntry(type, id, owner, decision));
+    }
+
+    public void modClass(ContentType type, String id, String owner, String className) {
+        modClasses.add(new ModClassEntry(type, id, owner, className));
+    }
+
+    public Collection<ModClassEntry> modClasses() {
+        return Collections.unmodifiableCollection(modClasses);
     }
 
     public void warn(String warning) {
@@ -183,6 +196,25 @@ public final class Report {
                 out.append("(dry run: would be)\n");
             }
             byMod(out, cuts);
+            out.append('\n');
+        }
+        if (!modClasses.isEmpty()) {
+            out.append("Redacted, but a mod's own class (").append(modClasses.size())
+                    .append("). Code that casts one of these to its own class crashes (a ClassCastException naming the class).\n")
+                    .append("If a crash or a log error names one, hide it instead of redacting it.\n");
+            Map<String, List<ModClassEntry>> byMod = new TreeMap<>();
+            for (ModClassEntry entry : modClasses) {
+                byMod.computeIfAbsent(entry.owner(), k -> new ArrayList<>()).add(entry);
+            }
+            for (Map.Entry<String, List<ModClassEntry>> mod : byMod.entrySet()) {
+                List<ModClassEntry> entries = mod.getValue();
+                entries.sort(Comparator.comparing((ModClassEntry e) -> e.type()).thenComparing(ModClassEntry::id));
+                out.append("\n[").append(mod.getKey()).append("] ").append(entries.size()).append('\n');
+                for (ModClassEntry entry : entries) {
+                    out.append("  ").append(pad(entry.type().keyword(), 7)).append(pad(entry.id(), 56))
+                            .append(entry.className()).append('\n');
+                }
+            }
             out.append('\n');
         }
         if (!hidden.isEmpty()) {

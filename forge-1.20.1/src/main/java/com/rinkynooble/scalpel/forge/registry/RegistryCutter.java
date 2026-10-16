@@ -12,6 +12,7 @@ import com.rinkynooble.scalpel.forge.content.RedactedBlock;
 import com.rinkynooble.scalpel.forge.content.RedactedBlockItem;
 import com.rinkynooble.scalpel.forge.content.RedactedEntity;
 import com.rinkynooble.scalpel.forge.content.RedactedItem;
+import com.rinkynooble.scalpel.forge.content.RemovedBlock;
 import com.rinkynooble.scalpel.forge.content.RemovedItem;
 import com.rinkynooble.scalpel.forge.mixin.ForgeSpawnEggItemAccessor;
 import com.rinkynooble.scalpel.forge.mixin.MappedRegistryAccessor;
@@ -27,6 +28,8 @@ import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.SpawnEggItem;
 import net.minecraft.world.item.StandingAndWallBlockItem;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.FlowerPotBlock;
 import net.minecraftforge.common.ForgeSpawnEggItem;
 import net.minecraftforge.registries.ForgeRegistry;
 import net.minecraftforge.registries.RegistryManager;
@@ -47,10 +50,12 @@ import java.util.function.Supplier;
  * <p>Two entry points, both called from mixins:
  * <ul>
  *   <li>{@link #beforeLazyRegister}: {@code RegisterEvent#register} with a supplier (what DeferredRegister uses).
- *       Cutting here means the mod's object is never even constructed.</li>
+ *       Removed ids, redacted entity types and the items of redacted blocks are cut here, so the mod's object is
+ *       never even constructed.</li>
  *   <li>{@link #beforeAdd}: {@code ForgeRegistry#add}, where every registration ends up (vanilla bootstrap,
  *       direct {@code Registry.register} calls). The object already exists here, so links such as a block item's
- *       block or a spawn egg's entity can be checked.</li>
+ *       block or a spawn egg's entity can be checked. Redacted blocks and items are swapped here too: a placeholder
+ *       block copies the original's block states, and the report can name a mod's own class.</li>
  * </ul>
  */
 public final class RegistryCutter {
@@ -90,7 +95,7 @@ public final class RegistryCutter {
         return supplier.getClass().getName().startsWith("net.minecraftforge.registries.RegisterEvent");
     }
 
-    public static Cut beforeLazyRegister(ResourceKey<?> registryKey, ResourceLocation name) {
+    public static Cut beforeLazyRegister(ResourceKey<?> registryKey, ResourceLocation name, Supplier<?> supplier) {
         ContentType type = typeOf(registryKey);
         if (type == null || name.getNamespace().equals(Scalpel.MOD_ID)) {
             return null;
@@ -113,6 +118,13 @@ public final class RegistryCutter {
         if (!decision.isCut()) {
             return null;
         }
+        boolean placesPlaceholder = type == ContentType.ITEM && forgeRegistry(Registries.BLOCK).getValue(name) instanceof RedactedBlock;
+        if (decision.action() != Action.REMOVE && type != ContentType.ENTITY && !placesPlaceholder) {
+            // Built, then swapped in beforeAdd: a block's states and an item's class are only known once it exists.
+            return buildRedacted(registryKey, type, name, decision, supplier);
+        }
+        // The item of a redacted block is never built: its block is already the placeholder, and mods hand the
+        // block to the item's constructor cast to their own class (Mekanism's BlockDeferredRegister).
         processed.add(key(type, id));
         record(core, type, id, name.getNamespace(), decision);
         if (decision.action() == Action.REMOVE) {
@@ -120,6 +132,29 @@ public final class RegistryCutter {
             return Cut.SKIP;
         }
         return new Cut(false, placeholder(type, name, null));
+    }
+
+    /**
+     * Builds a redacted block or item for {@link #beforeAdd} to swap. It is built only to read its block states and
+     * class, so a constructor that fails on another cut entry it needs costs only that: the entry gets a placeholder
+     * that was never built, with a warning, and whatever the failed constructor left in the registry is released.
+     */
+    private static Cut buildRedacted(ResourceKey<?> registryKey, ContentType type, ResourceLocation name, Decision decision, Supplier<?> supplier) {
+        Set<Object> before = Collections.newSetFromMap(new IdentityHashMap<>());
+        before.addAll(intrusiveHolders(registryKey).keySet());
+        try {
+            return new Cut(false, supplier.get());
+        } catch (RuntimeException e) {
+            intrusiveHolders(registryKey).keySet().removeIf(obj -> !before.contains(obj));
+            ScalpelCore core = Scalpel.core();
+            String id = name.toString();
+            processed.add(key(type, id));
+            record(core, type, id, name.getNamespace(), decision);
+            core.warn(type.keyword() + " " + id + " failed to build (" + e.getClass().getSimpleName() + "), so its placeholder was made"
+                    + " without it" + (type == ContentType.BLOCK ? " and has no block states" : "") + ". scalpel.log has the error.");
+            core.log().detail("building redacted " + type.keyword() + " " + id + " failed: " + e);
+            return new Cut(false, placeholder(type, name, null));
+        }
     }
 
     public static Cut beforeAdd(ResourceKey<?> registryKey, ResourceLocation name, Object value, String owner) {
@@ -178,16 +213,69 @@ public final class RegistryCutter {
             return null;
         }
         record(core, type, id, modId, decision);
+        if (decision.action() == Action.REDACT) {
+            String modClass = modClassOf(type, value);
+            if (modClass != null) {
+                core.report().modClass(type, id, modId, modClass);
+            }
+        }
         if (!core.applies()) {
             return null;
         }
         release(registryKey, value);
         refused.put(value, id);
         if (decision.action() == Action.REMOVE) {
+            forgetRefused(value, null);
             makeGhost(registryKey, type, name);
             return Cut.SKIP;
         }
-        return new Cut(false, placeholder(type, name, value));
+        Object replacement = placeholder(type, name, value);
+        forgetRefused(value, replacement);
+        return new Cut(false, replacement);
+    }
+
+    /**
+     * The original's class when it is a mod's own (TaCZ's {@code GunSmithTableItem}), as opposed to a vanilla or
+     * Forge class such as {@code Item}, {@code BlockItem}, {@code Block} or {@code StairBlock}. A mod's code may cast
+     * its entry to that class, which a placeholder can't satisfy. Null for vanilla and Forge classes.
+     */
+    private static String modClassOf(ContentType type, Object value) {
+        if (type != ContentType.ITEM && type != ContentType.BLOCK) {
+            return null;
+        }
+        Class<?> c = value.getClass();
+        while (c.isAnonymousClass()) {
+            c = c.getSuperclass();
+        }
+        return c.getName().startsWith("net.minecraft") ? null : c.getName();
+    }
+
+    /**
+     * Takes a refused object out of the vanilla and Forge lists its own constructor put it in. A spawn egg adds itself
+     * to the egg lists, and the client registers a color for every egg there, which fails for an unregistered item
+     * ("No delegate exists for value"). A flower pot built with the old constructor adds itself to the empty pot's
+     * plants, and potting the plant would place the unregistered block.
+     */
+    private static void forgetRefused(Object original, Object replacement) {
+        if (original instanceof SpawnEggItem egg) {
+            SpawnEggItemAccessor.scalpel$byId().values().removeIf(e -> e == egg);
+            if (egg instanceof ForgeSpawnEggItem forgeEgg) {
+                ForgeSpawnEggItemAccessor.scalpel$modEggs().remove(forgeEgg);
+                ForgeSpawnEggItemAccessor.scalpel$typeMap().values().removeIf(e -> e == forgeEgg);
+            }
+        }
+        if (original instanceof FlowerPotBlock pot && Blocks.FLOWER_POT instanceof FlowerPotBlock empty && pot != empty) {
+            Block stand = replacement instanceof Block block ? block : Blocks.AIR;
+            for (Map.Entry<ResourceLocation, Supplier<? extends Block>> plant : new ArrayList<>(empty.getFullPotsView().entrySet())) {
+                try {
+                    if (plant.getValue().get() == pot) {
+                        empty.addPlant(plant.getKey(), () -> stand);
+                    }
+                } catch (RuntimeException e) {
+                    // Another mod's pot that isn't registered yet; it isn't this one.
+                }
+            }
+        }
     }
 
     /**
@@ -197,7 +285,7 @@ public final class RegistryCutter {
      * intrusive holder is dropped right away so the registry can freeze.
      */
     private static void makeGhost(ResourceKey<?> registryKey, ContentType type, ResourceLocation name) {
-        Object ghost = placeholder(type, name, null);
+        Object ghost = type == ContentType.BLOCK ? new RemovedBlock(name) : placeholder(type, name, null);
         release(registryKey, ghost);
         refused.put(ghost, name.toString());
         ghosts.put(key(type, name.toString()), ghost);
@@ -267,7 +355,7 @@ public final class RegistryCutter {
 
     private static Object placeholder(ContentType type, ResourceLocation name, Object original) {
         return switch (type) {
-            case BLOCK -> new RedactedBlock(name);
+            case BLOCK -> original instanceof Block block ? RedactedBlock.copying(name, block) : new RedactedBlock(name);
             case ITEM -> {
                 RedactedBlock block = redactedBlockFor(name, original);
                 yield block != null ? new RedactedBlockItem(block, name) : new RedactedItem(name);
@@ -291,15 +379,21 @@ public final class RegistryCutter {
     }
 
     /** Removes the intrusive holder the refused object created, or Forge refuses to freeze the registry. */
-    @SuppressWarnings("unchecked")
     private static void release(ResourceKey<?> registryKey, Object value) {
+        intrusiveHolders(registryKey).remove(value);
+    }
+
+    /** Objects built for a registry and not registered yet. Empty when the registry keeps none. */
+    @SuppressWarnings("unchecked")
+    private static Map<Object, ?> intrusiveHolders(ResourceKey<?> registryKey) {
         Registry<?> registry = BuiltInRegistries.REGISTRY.get(registryKey.location());
         if (registry instanceof MappedRegistryAccessor<?> accessor) {
             Map<Object, ?> holders = ((MappedRegistryAccessor<Object>) accessor).scalpel$unregisteredIntrusiveHolders();
             if (holders != null) {
-                holders.remove(value);
+                return holders;
             }
         }
+        return new IdentityHashMap<>();
     }
 
     private static List<String> placedBlockIds(Object value) {

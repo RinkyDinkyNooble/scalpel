@@ -16,7 +16,10 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import java.util.function.Supplier;
 
-/** Cuts DeferredRegister entries before their supplier runs, so the mod's object is never built. */
+/**
+ * Cuts DeferredRegister entries before their supplier runs, so a removed entry (or a redacted entity type, or the item
+ * of a redacted block) is never built. Other redacted blocks and items are built here, guarded, and swapped later.
+ */
 @Mixin(value = RegisterEvent.class, remap = false)
 public abstract class RegisterEventMixin {
     @Shadow
@@ -34,7 +37,7 @@ public abstract class RegisterEventMixin {
         if (forgeRegistry == null || !registryKey.equals(key) || RegistryCutter.wrapsBuiltObject(valueSupplier)) {
             return;
         }
-        RegistryCutter.Cut cut = RegistryCutter.beforeLazyRegister(key, name);
+        RegistryCutter.Cut cut = RegistryCutter.beforeLazyRegister(key, name, valueSupplier);
         if (cut == null) {
             return;
         }

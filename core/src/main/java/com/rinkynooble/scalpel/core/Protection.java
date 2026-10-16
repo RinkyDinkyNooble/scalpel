@@ -25,7 +25,7 @@ public final class Protection {
     private static final Set<String> SOFT_ITEMS = Set.of(
             "minecraft:barrier", "minecraft:light", "minecraft:structure_void", "minecraft:structure_block",
             "minecraft:jigsaw", "minecraft:debug_stick", "minecraft:knowledge_book",
-            "minecraft:written_book", "minecraft:filled_map", "minecraft:enchanted_book");
+            "minecraft:written_book", "minecraft:filled_map");
     private static final Set<String> SOFT_ENTITIES = Set.of(
             "minecraft:item", "minecraft:experience_orb", "minecraft:falling_block", "minecraft:lightning_bolt",
             "minecraft:marker", "minecraft:area_effect_cloud", "minecraft:fishing_bobber", "minecraft:arrow",

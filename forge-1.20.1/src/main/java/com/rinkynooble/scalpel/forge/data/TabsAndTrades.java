@@ -4,9 +4,11 @@ import com.rinkynooble.scalpel.core.ScalpelCore;
 import com.rinkynooble.scalpel.forge.Scalpel;
 import com.rinkynooble.scalpel.forge.registry.RegistryCutter;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.npc.VillagerTrades;
+import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.trading.MerchantOffer;
 import net.minecraftforge.event.BuildCreativeModeTabContentsEvent;
@@ -17,13 +19,15 @@ import net.minecraftforge.eventbus.api.IEventBus;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Two things mods fill in code rather than data: creative tabs and villager / wandering trader trades.
- * Tabs are filtered once when they are built, leaving out cut and hidden items. Trades keep hidden items, and are
+ * Tabs are filtered once when they are built, leaving out cut and hidden items, and a tab whose icon is cut shows its
+ * first remaining item instead. Trades keep hidden items, and are
  * wrapped so an offer that would contain cut content
  * is skipped (the game already skips offers that come back empty); that check only runs when a villager
  * rolls new trades.
@@ -58,6 +62,27 @@ public final class TabsAndTrades {
             event.getEntries().remove(stack);
         }
         DataFilter.change(core, "creative tab entries removed", event.getTabKey().location().toString(), String.valueOf(remove.size()));
+    }
+
+    /**
+     * A tab's icon when its own is cut. Many mods draw their tab with one of their own items, and a cut one leaves the
+     * tab button blank, so the first item the tab still shows takes its place. Null keeps the icon.
+     */
+    @Nullable
+    public static ItemStack iconFor(CreativeModeTab tab, ItemStack icon, Collection<ItemStack> shown) {
+        ScalpelCore core = Scalpel.core();
+        if (!core.applies() || (!icon.isEmpty() && !RegistryCutter.isCutItem(icon.getItem()))) {
+            return null;
+        }
+        for (ItemStack stack : shown) {
+            if (!stack.isEmpty() && !RegistryCutter.isUnlisted(stack.getItem())) {
+                String was = icon.isEmpty() ? "no icon" : RegistryCutter.itemId(icon.getItem()) + " is cut";
+                DataFilter.change(core, "creative tab icon replaced", String.valueOf(BuiltInRegistries.CREATIVE_MODE_TAB.getKey(tab)),
+                        was + ", now " + RegistryCutter.itemId(stack.getItem()));
+                return stack.copyWithCount(1);
+            }
+        }
+        return null;
     }
 
     private static void onVillagerTrades(VillagerTradesEvent event) {

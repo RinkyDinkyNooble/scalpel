@@ -6,6 +6,7 @@
   "compatibilityLevel": "JAVA_17",
   "refmap": "scalpel.refmap.json",
   "mixins": [
+    "CreativeModeTabMixin",
     "ForgeRegistryMixin",
     "ForgeSpawnEggItemAccessor",
     "IngredientAccessor",
@@ -13,6 +14,7 @@
     "MappedRegistryAccessor",
     "NbtUtilsMixin",
     "PlayerAdvancementsMixin",
+    "RecipeManagerMixin",
     "RegisterEventMixin",
     "RegistryDataLoaderMixin",
     "RegistryObjectMixin",

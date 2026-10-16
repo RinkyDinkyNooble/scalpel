@@ -13,8 +13,10 @@ import com.rinkynooble.scalpel.forge.mixin.IngredientAccessor;
 import com.rinkynooble.scalpel.forge.mixin.TagValueAccessor;
 import com.rinkynooble.scalpel.forge.registry.RegistryCutter;
 import net.minecraft.core.RegistryAccess;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.ReloadableServerResources;
 import net.minecraft.server.packs.resources.PreparableReloadListener;
+import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.item.crafting.Recipe;
@@ -30,9 +32,11 @@ import net.minecraftforge.registries.ForgeRegistries;
 
 import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -103,11 +107,16 @@ public final class ServerData {
                 }
             } else if (anyCut) {
                 ItemStack result = safeResult(recipe, access);
+                String special = result == null || result.isEmpty() ? cutSpecialProducts(recipe, resolver) : null;
                 if (result != null && !result.isEmpty() && RegistryCutter.isCutItem(result.getItem())) {
                     if (!fromFile || core.applies()) {
                         reason = "recipe dropped";
                         detail = "makes " + RegistryCutter.itemId(result.getItem());
                     }
+                } else if (special != null) {
+                    // The file pass can't see these (their files name no item), so they're reported here even in a dry run.
+                    reason = "recipe dropped";
+                    detail = "makes " + special + " (a special recipe, matched by its type)";
                 } else {
                     List<Dead> dead = deadIngredients(recipe);
                     if (!core.applies() && fromFile) {
@@ -139,6 +148,44 @@ public final class ServerData {
         if (dropped > 0 && core.applies()) {
             recipes.replaceRecipes(kept);
         }
+    }
+
+    /**
+     * What vanilla's special crafting recipes make, by serializer. These report no result (the game works it out from
+     * the grid), so this is the only way to see that one makes cut content. Firework rockets and stars report theirs.
+     */
+    private static final Map<String, List<String>> SPECIAL_PRODUCTS = specialProducts();
+
+    private static Map<String, List<String>> specialProducts() {
+        Map<String, List<String>> products = new HashMap<>();
+        products.put("minecraft:crafting_special_firework_star_fade", List.of("minecraft:firework_star"));
+        products.put("minecraft:crafting_special_suspiciousstew", List.of("minecraft:suspicious_stew"));
+        products.put("minecraft:crafting_special_tippedarrow", List.of("minecraft:tipped_arrow"));
+        products.put("minecraft:crafting_special_mapcloning", List.of("minecraft:filled_map"));
+        products.put("minecraft:crafting_special_bookcloning", List.of("minecraft:written_book"));
+        products.put("minecraft:crafting_special_shielddecoration", List.of("minecraft:shield"));
+        products.put("minecraft:crafting_decorated_pot", List.of("minecraft:decorated_pot"));
+        products.put("minecraft:crafting_special_armordye", List.of("minecraft:leather_helmet", "minecraft:leather_chestplate",
+                "minecraft:leather_leggings", "minecraft:leather_boots", "minecraft:leather_horse_armor"));
+        List<String> banners = new ArrayList<>();
+        List<String> boxes = new ArrayList<>(List.of("minecraft:shulker_box"));
+        for (DyeColor color : DyeColor.values()) {
+            banners.add("minecraft:" + color.getName() + "_banner");
+            boxes.add("minecraft:" + color.getName() + "_shulker_box");
+        }
+        products.put("minecraft:crafting_special_bannerduplicate", banners);
+        products.put("minecraft:crafting_special_shulkerboxcoloring", boxes);
+        return products;
+    }
+
+    /** The products of a special recipe when every one of them is cut, else null. */
+    private static String cutSpecialProducts(Recipe<?> recipe, Resolver resolver) {
+        ResourceLocation serializer = ForgeRegistries.RECIPE_SERIALIZERS.getKey(recipe.getSerializer());
+        List<String> products = serializer == null ? null : SPECIAL_PRODUCTS.get(serializer.toString());
+        if (products == null || !products.stream().allMatch(id -> resolver.isCut(ContentType.ITEM, id))) {
+            return null;
+        }
+        return products.size() == 1 ? products.get(0) : String.join(", ", products);
     }
 
     /** Ingredients made only of cut items or tags the cuts emptied. Custom (non-vanilla) ingredients are not inspected. */
@@ -288,7 +335,9 @@ public final class ServerData {
             } catch (RuntimeException e) {
                 ingredients.clear();
             }
-            infos.add(new Cascade.RecipeInfo(recipe.getId().toString(), Set.of(RegistryCutter.itemId(result.getItem())), ingredients));
+            Set<String> outputs = new HashSet<>(DataFilter.outputsNamed(recipe.getId().toString()));
+            outputs.add(RegistryCutter.itemId(result.getItem()));
+            infos.add(new Cascade.RecipeInfo(recipe.getId().toString(), outputs, ingredients));
         }
         Set<String> lost = new HashSet<>();
         for (String id : DataFilter.lostProducers()) {
