@@ -49,6 +49,36 @@ class ResolverTest {
     }
 
     @Test
+    void anyLeavesEnchantmentsAlone() {
+        Resolver r = resolver("remove any a:*", "redact enchantment b:*");
+        assertFalse(r.decide(ContentType.ENCHANTMENT, "a:sharp").isCut());
+        assertTrue(r.decide(ContentType.ITEM, "a:sharp").isCut());
+        assertEquals(Decision.Action.REDACT, r.decide(ContentType.ENCHANTMENT, "b:sharp").action());
+    }
+
+    @Test
+    void vanillaEnchantmentRemoveBecomesRedact() {
+        Resolver r = resolver("remove enchantment minecraft:mending", "remove enchantment a:*");
+        assertEquals(Decision.Action.REDACT, r.decide(ContentType.ENCHANTMENT, "minecraft:mending").action());
+        assertEquals(Decision.Action.REMOVE, r.decide(ContentType.ENCHANTMENT, "a:sharp").action());
+        Settings allowed = new Settings(false, true, true, true, RecipeMode.DROP, 3);
+        assertEquals(Decision.Action.REDACT, resolver(allowed, "remove enchantment minecraft:mending")
+                .decide(ContentType.ENCHANTMENT, "minecraft:mending").action());
+    }
+
+    /** Files may keep naming a redacted enchantment, since it stays registered. A removed one must go from them. */
+    @Test
+    void onlyRemovedEnchantmentsCountForDataFiles() {
+        Resolver r = resolver("redact enchantment a:kept", "remove enchantment a:gone");
+        r.markCut(ContentType.ENCHANTMENT, "a:kept", r.decide(ContentType.ENCHANTMENT, "a:kept"));
+        r.markCut(ContentType.ENCHANTMENT, "a:gone", r.decide(ContentType.ENCHANTMENT, "a:gone"));
+        assertFalse(r.isCutAnywhere("a:kept"));
+        assertTrue(r.isCutAnywhere("a:gone"));
+        assertTrue(r.isRemovedEnchantment("a:gone"));
+        assertFalse(r.isRemovedEnchantment("a:kept"));
+    }
+
+    @Test
     void vanillaRemoveBecomesRedact() {
         Resolver r = resolver("remove item minecraft:dead_bush");
         Decision d = r.decide(ContentType.ITEM, "minecraft:dead_bush");

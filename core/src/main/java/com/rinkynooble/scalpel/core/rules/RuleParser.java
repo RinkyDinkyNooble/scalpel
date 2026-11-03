@@ -66,14 +66,14 @@ public final class RuleParser {
         String typeKeyword = tokens.get(1);
         Set<ContentType> types = ContentType.parse(typeKeyword);
         if (types == null) {
-            throw new IllegalArgumentException("unknown type '" + typeKeyword + "' (use item, block, entity, any, recipe, loot, advancement or tag)");
+            throw new IllegalArgumentException("unknown type '" + typeKeyword + "' (use item, block, entity, enchantment, any, recipe, loot, advancement or tag)");
         }
         boolean registry = types.iterator().next().isRegistry();
         if (verb == Verb.REDACT && !registry) {
-            throw new IllegalArgumentException("only items, blocks and entities can be redacted; use 'remove " + typeKeyword + "'");
+            throw new IllegalArgumentException("only items, blocks, entities and enchantments can be redacted; use 'remove " + typeKeyword + "'");
         }
         if (verb == Verb.HIDE && !registry) {
-            throw new IllegalArgumentException("only items, blocks and entities can be hidden");
+            throw new IllegalArgumentException("only items, blocks, entities and enchantments can be hidden");
         }
 
         String patternToken = tokens.get(2);

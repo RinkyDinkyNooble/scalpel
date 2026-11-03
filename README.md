@@ -18,6 +18,7 @@ Hiding content (removing recipes, hiding it in JEI) still leaves it loaded. Scal
 - [What else gets cleaned up](#what-else-gets-cleaned-up)
 - [Recipes that use cut content](#recipes-that-use-cut-content)
 - [Vanilla content](#vanilla-content)
+- [Enchantments](#enchantments)
 - [Settings](#settings)
 - [Commands](#commands)
 - [Report and log](#report-and-log)
@@ -72,12 +73,13 @@ hide   any  palettemod:*_debug
 | `block` | blocks |
 | `entity` | entity types |
 | `any` | items, blocks and entities |
+| `enchantment` | enchantments (`any` doesn't include them) |
 | `recipe` | recipe ids |
 | `loot` | loot table ids |
 | `advancement` | advancement ids |
 | `tag` | tag ids (items, blocks and entities) |
 
-Recipes, loot tables, advancements and tags can only be kept or removed. Removing a tag empties it. Only items, blocks and entities can be hidden or redacted.
+Recipes, loot tables, advancements and tags can only be kept or removed. Removing a tag empties it. Only items, blocks, entities and enchantments can be hidden or redacted.
 
 ### Patterns
 
@@ -103,7 +105,7 @@ Lines with mistakes are skipped, and each one is listed at the top of the report
 
 ## Remove, redact or hide
 
-**Redact** keeps the id but registers a placeholder under it: a plain block or item with a "redacted document" texture, the name "Redacted" and a tooltip that says which id it replaced. It has no behaviour, no creative tab entry, and it's hidden in JEI and EMI. The only way to get one is `/give`. A redacted block keeps the original's block states (which way it faces, for example), so other mods' code and resource files that read them still work. To copy them, Scalpel creates the original block and replaces it before it's registered. Redacted items are created the same way, except the item of a redacted block. A redacted entity is never created, and the models of redacted content are never loaded. Mods that look up their own content by id still find something, so redact rarely crashes anything. The exception is a mod whose code expects one of its own classes: the report lists every redacted block and item that was a mod's own class (see [Limits](#limits)).
+**Redact** keeps the id but registers a placeholder under it: a plain block or item with a "redacted document" texture, the name "Redacted" and a tooltip that says which id it replaced. It has no behaviour, no creative tab entry, and it's hidden in JEI and EMI. The only way to get one is `/give`. A redacted block keeps the original's block states (which way it faces, for example), so other mods' code and resource files that read them still work. To copy them, Scalpel creates the original block and replaces it before it's registered. Redacted items are created the same way, except the item of a redacted block. A redacted entity is never created, and the models of redacted content are never loaded. Mods that look up their own content by id still find something, and a mod that built the original itself and holds on to it gets the placeholder when Forge looks it up, so redact rarely crashes anything. The exception is a mod whose code expects one of its own classes: the report lists every redacted block and item that was a mod's own class (see [Limits](#limits)).
 
 A redacted entity shows up as a floating "Redacted" label. It can't be summoned and isn't saved with the world.
 
@@ -152,6 +154,23 @@ Vanilla code keeps direct references to its own blocks, items and entities, so S
 - `redact` doesn't replace vanilla content. It stays registered as itself, but it's removed from recipes, tags, loot, world generation, structures, creative tabs, trades and recipe viewers. The tooltip says "Redacted by Scalpel". To keep vanilla content working and only get it out of sight, use `hide`.
 - `remove` on vanilla content acts like `redact`, unless you set `allowRemovingVanilla = true`. Removing vanilla content can crash the game.
 - A few ids are protected, such as stone, water, fire, portals and item entities. Set `protectCriticalIds = false` to allow cutting them. Air and the player can never be cut. Hiding a protected id is always allowed.
+
+## Enchantments
+
+Enchantments take their own rule type.
+
+```
+redact enchantment examplemod:too_strong
+hide   enchantment examplemod:secret
+remove enchantment examplemod:*
+keep   enchantment examplemod:fine
+```
+
+**Redact** is the safe choice. The enchantment stays registered as itself, so nothing that names it breaks, but it does nothing. Items that have it read as level 0, its effects don't run, and its tooltip line says "Redacted". The enchanting table, loot, trades, creative tabs, JEI and EMI stop offering it. This works on vanilla enchantments too.
+
+**Remove** takes it out of the registry. Loot functions lose it, a loot condition that asks for it never passes, advancements that mention it are removed, and tags lose it. Other mods' own data files aren't cleaned up, so a mod may log errors about them: Apotheosis logs failed gem files when its enchantments are removed. Vanilla enchantments can only be redacted, whatever `allowRemovingVanilla` says.
+
+**Hide** leaves it working. Enchanted books that have only hidden or cut enchantments are left out of JEI, EMI and the creative tabs.
 
 ## Settings
 
@@ -211,7 +230,7 @@ Rules files live in `config/`, so they ship with the pack like any other config.
 
 - JEI, EMI and Jade support is built in and optional.
 - Scalpel's loot modifier runs last among global loot modifiers, whatever order the data packs list them in. LootJS runs after it (see [Limits](#limits)).
-- Tested with ModernFix, FerriteCore, Smooth Boot (Reloaded), Saturn, KubeJS, Farmer's Delight, and several decoration and mob mods.
+- Tested with ModernFix, FerriteCore, Smooth Boot (Reloaded), Saturn, KubeJS, Farmer's Delight, Applied Energistics 2, Apotheosis, and several decoration and mob mods.
 - If ModernFix's dynamic resources option is on, the original mod's blockstate files may log warnings for placeholder blocks. They look right regardless.
 
 ## Limits
@@ -219,6 +238,8 @@ Rules files live in `config/`, so they ship with the pack like any other config.
 - Existing worlds with cut content in them can break.
 - A mod whose code expects its own class for one of its blocks or items crashes when that block or item is redacted, usually with a `ClassCastException` naming the class. This is common in tech mods and rare in decoration mods. The report lists every redacted block and item that was a mod's own class. Hide or keep those instead, or remove all of that mod's content.
 - Recipes that scripts add with another mod's own recipe type aren't checked for tags the cuts left empty.
+- A mod that holds on to its own block and places it in the world itself, rather than asking for it by id, can still crash when that block is cut.
+- An item that already has a cut enchantment keeps its glint. A mod with its own enchanting system can still offer a redacted enchantment, and a mod that reads enchantments straight from an item's data can still see one.
 - Textures of cut blocks and items are still stitched into the texture atlas. Models are skipped.
 - Hiding covers JEI, EMI and the creative tabs. The vanilla recipe book still shows recipes that make a hidden item.
 - LootJS applies its changes after every global loot modifier, Scalpel's included. A cut item that a LootJS script adds to loot can still drop. Items that mod code spawns directly, without a loot table, are not checked either.

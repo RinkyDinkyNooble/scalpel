@@ -1,6 +1,6 @@
 # Scalpel
 
-Scalpel is for modpack makers. List the items, blocks and entities you don't want, and Scalpel cuts them out while the game loads, along with their recipes, tags, loot and world generation.
+Scalpel is for modpack makers. List the items, blocks, entities and enchantments you don't want, and Scalpel cuts them out while the game loads, along with their recipes, tags, loot and world generation.
 
 Hiding content still leaves it loaded. Scalpel stops it from loading, so you can add a big decoration or palette mod and only pay for the parts you keep. When you'd rather keep something working and just get it out of sight, Scalpel can hide it instead.
 

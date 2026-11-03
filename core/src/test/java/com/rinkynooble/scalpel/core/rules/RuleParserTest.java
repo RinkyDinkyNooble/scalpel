@@ -63,7 +63,7 @@ class RuleParserTest {
         assertEquals(10, result.errors().size());
         assertEquals("test.rules:1", result.errors().get(0).location());
         assertTrue(result.errors().get(0).message().contains("unknown verb"));
-        assertTrue(result.errors().get(2).message().contains("only items, blocks and entities"));
+        assertTrue(result.errors().get(2).message().contains("only items, blocks, entities and enchantments"));
     }
 
     @Test

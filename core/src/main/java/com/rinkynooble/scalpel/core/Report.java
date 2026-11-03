@@ -190,7 +190,7 @@ public final class Report {
             for (ContentType type : ContentType.REGISTRY_TYPES) {
                 long redacted = cuts.stream().filter(c -> c.type() == type && c.decision().action() == Decision.Action.REDACT).count();
                 long removed = cuts.stream().filter(c -> c.type() == type && c.decision().action() == Decision.Action.REMOVE).count();
-                out.append(pad(plural(type) + ":", 11)).append(redacted).append(" redacted, ").append(removed).append(" removed\n");
+                out.append(pad(plural(type) + ":", 14)).append(redacted).append(" redacted, ").append(removed).append(" removed\n");
             }
             if (dryRun) {
                 out.append("(dry run: would be)\n");

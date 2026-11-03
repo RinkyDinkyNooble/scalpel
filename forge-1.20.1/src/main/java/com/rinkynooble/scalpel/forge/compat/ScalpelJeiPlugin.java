@@ -31,7 +31,7 @@ public class ScalpelJeiPlugin implements IModPlugin {
     public void onRuntimeAvailable(IJeiRuntime runtime) {
         IIngredientManager ingredients = runtime.getIngredientManager();
         List<ItemStack> hide = ingredients.getAllIngredients(VanillaTypes.ITEM_STACK).stream()
-                .filter(stack -> !stack.isEmpty() && RegistryCutter.isUnlisted(stack.getItem()))
+                .filter(stack -> !stack.isEmpty() && RegistryCutter.isUnlisted(stack))
                 .toList();
         if (!hide.isEmpty()) {
             ingredients.removeIngredientsAtRuntime(VanillaTypes.ITEM_STACK, hide);

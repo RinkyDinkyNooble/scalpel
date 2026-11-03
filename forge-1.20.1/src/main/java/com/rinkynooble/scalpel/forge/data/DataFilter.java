@@ -8,6 +8,7 @@ import com.rinkynooble.scalpel.core.RecipeMode;
 import com.rinkynooble.scalpel.core.Resolver;
 import com.rinkynooble.scalpel.core.ScalpelCore;
 import com.rinkynooble.scalpel.core.json.JsonScrub;
+import com.rinkynooble.scalpel.core.json.LootEnchantments;
 import com.rinkynooble.scalpel.core.json.RecipeIngredients;
 import com.rinkynooble.scalpel.core.json.RecipeRewriter;
 import com.rinkynooble.scalpel.forge.Scalpel;
@@ -336,6 +337,10 @@ public final class DataFilter {
                 continue;
             }
             JsonElement json = core.applies() ? entry.getValue() : entry.getValue().deepCopy();
+            Set<String> enchantments = LootEnchantments.strip(json, resolver::isRemovedEnchantment);
+            if (!enchantments.isEmpty()) {
+                change(core, "loot enchantments removed", id, String.join(", ", enchantments));
+            }
             JsonScrub.Result result = JsonScrub.scrub(json, isCut, LOOT);
             if (result.dropWhole()) {
                 change(core, "loot table removed", id, "uses " + String.join(", ", result.hits()));

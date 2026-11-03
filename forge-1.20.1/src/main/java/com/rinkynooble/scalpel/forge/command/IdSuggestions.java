@@ -44,7 +44,7 @@ public final class IdSuggestions {
         return indexes.computeIfAbsent(type, t -> new IdIndex(ids(server, t)));
     }
 
-    /** Items, blocks and entities together, including removed ids, for {@code find} and {@code explain}. */
+    /** Items, blocks, entities and enchantments together, including removed ids, for {@code find} and {@code explain}. */
     static synchronized IdIndex anyRegistry(MinecraftServer server) {
         if (anyRegistry == null) {
             List<String> all = new ArrayList<>();
@@ -62,6 +62,7 @@ public final class IdSuggestions {
             case ITEM -> addKeys(ids, BuiltInRegistries.ITEM);
             case BLOCK -> addKeys(ids, BuiltInRegistries.BLOCK);
             case ENTITY -> addKeys(ids, BuiltInRegistries.ENTITY_TYPE);
+            case ENCHANTMENT -> addKeys(ids, BuiltInRegistries.ENCHANTMENT);
             case RECIPE -> server.getRecipeManager().getRecipeIds().forEach(id -> ids.add(id.toString()));
             case LOOT -> server.getLootData().getKeys(LootDataType.TABLE).forEach(id -> ids.add(id.toString()));
             case ADVANCEMENT -> server.getAdvancements().getAllAdvancements().forEach(a -> ids.add(a.getId().toString()));

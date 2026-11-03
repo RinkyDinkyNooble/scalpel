@@ -58,6 +58,7 @@ public final class TagFilter {
             case "tags/items" -> ContentType.ITEM;
             case "tags/blocks" -> ContentType.BLOCK;
             case "tags/entity_types" -> ContentType.ENTITY;
+            case "tags/enchantment" -> ContentType.ENCHANTMENT;
             default -> null;
         };
     }

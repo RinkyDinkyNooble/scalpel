@@ -9,12 +9,15 @@ public enum ContentType {
     ITEM(true),
     BLOCK(true),
     ENTITY(true),
+    ENCHANTMENT(true),
     RECIPE(false),
     LOOT(false),
     ADVANCEMENT(false),
     TAG(false);
 
-    public static final Set<ContentType> REGISTRY_TYPES = EnumSet.of(ITEM, BLOCK, ENTITY);
+    public static final Set<ContentType> REGISTRY_TYPES = EnumSet.of(ITEM, BLOCK, ENTITY, ENCHANTMENT);
+    /** What {@code any} means in a rule. Enchantments are left out: they always take their own rule. */
+    public static final Set<ContentType> ANY_TYPES = EnumSet.of(ITEM, BLOCK, ENTITY);
 
     private final boolean registry;
 
@@ -30,10 +33,10 @@ public enum ContentType {
         return name().toLowerCase(Locale.ROOT);
     }
 
-    /** Parses a rule-file type keyword. {@code any} expands to every registry type. Returns null if unknown. */
+    /** Parses a rule-file type keyword. {@code any} expands to {@link #ANY_TYPES}. Returns null if unknown. */
     public static Set<ContentType> parse(String keyword) {
         if (keyword.equals("any")) {
-            return EnumSet.copyOf(REGISTRY_TYPES);
+            return EnumSet.copyOf(ANY_TYPES);
         }
         for (ContentType type : values()) {
             if (type.keyword().equals(keyword)) {

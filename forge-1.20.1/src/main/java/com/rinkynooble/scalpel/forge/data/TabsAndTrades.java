@@ -51,7 +51,7 @@ public final class TabsAndTrades {
         }
         List<ItemStack> remove = new ArrayList<>();
         for (var entry : event.getEntries()) {
-            if (RegistryCutter.isUnlisted(entry.getKey().getItem())) {
+            if (RegistryCutter.isUnlisted(entry.getKey())) {
                 remove.add(entry.getKey());
             }
         }
@@ -89,7 +89,10 @@ public final class TabsAndTrades {
         String source = "villager " + event.getType();
         Int2ObjectMap<List<VillagerTrades.ItemListing>> trades = event.getTrades();
         for (Int2ObjectMap.Entry<List<VillagerTrades.ItemListing>> level : trades.int2ObjectEntrySet()) {
-            wrapAll(level.getValue(), source + " level " + level.getIntKey());
+            // A copy, because another mod's listener may have left an immutable list here.
+            List<VillagerTrades.ItemListing> wrapped = new ArrayList<>(level.getValue());
+            wrapAll(wrapped, source + " level " + level.getIntKey());
+            level.setValue(wrapped);
         }
     }
 
@@ -112,6 +115,14 @@ public final class TabsAndTrades {
                 return offer;
             }
             for (ItemStack stack : new ItemStack[]{offer.getResult(), offer.getBaseCostA(), offer.getCostB()}) {
+                String enchantment = CutEnchantments.firstCut(stack);
+                if (enchantment != null) {
+                    if (reportedTrades.add(source + "|" + enchantment)) {
+                        DataFilter.change(Scalpel.core(), "trade offer removed", enchantment, source + " (" + inner.getClass().getName() + ")");
+                        Scalpel.core().writeReport();
+                    }
+                    return null;
+                }
                 if (!stack.isEmpty() && RegistryCutter.isCutItem(stack.getItem())) {
                     String id = RegistryCutter.itemId(stack.getItem());
                     if (reportedTrades.add(source + "|" + id)) {

@@ -13,7 +13,10 @@ import com.rinkynooble.scalpel.forge.content.RedactedBlockItem;
 import com.rinkynooble.scalpel.forge.content.RedactedEntity;
 import com.rinkynooble.scalpel.forge.content.RedactedItem;
 import com.rinkynooble.scalpel.forge.content.RemovedBlock;
+import com.rinkynooble.scalpel.forge.content.RemovedEnchantment;
 import com.rinkynooble.scalpel.forge.content.RemovedItem;
+import com.rinkynooble.scalpel.forge.data.CutEnchantments;
+import com.rinkynooble.scalpel.forge.mixin.BlockItemAccessor;
 import com.rinkynooble.scalpel.forge.mixin.ForgeSpawnEggItemAccessor;
 import com.rinkynooble.scalpel.forge.mixin.MappedRegistryAccessor;
 import com.rinkynooble.scalpel.forge.mixin.SpawnEggItemAccessor;
@@ -25,8 +28,11 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.item.BlockItem;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.SpawnEggItem;
 import net.minecraft.world.item.StandingAndWallBlockItem;
+import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.FlowerPotBlock;
@@ -68,6 +74,8 @@ public final class RegistryCutter {
     /** Objects that were built and then refused, so later links (a block item's block) can still be named. */
     private static final Set<Object> placeholderEntityTypes = Collections.newSetFromMap(Collections.synchronizedMap(new IdentityHashMap<>()));
     private static final Map<Object, String> refused = Collections.synchronizedMap(new IdentityHashMap<>());
+    /** Redacted originals and the placeholders registered in their place. */
+    private static final Map<Object, Object> standIns = Collections.synchronizedMap(new IdentityHashMap<>());
     /** Unregistered stand-ins for removed ids, handed to mod code that still asks for them. Keyed by type + id. */
     private static final Map<String, Object> ghosts = new ConcurrentHashMap<>();
 
@@ -83,6 +91,9 @@ public final class RegistryCutter {
         }
         if (registryKey.equals(Registries.ENTITY_TYPE)) {
             return ContentType.ENTITY;
+        }
+        if (registryKey.equals(Registries.ENCHANTMENT)) {
+            return ContentType.ENCHANTMENT;
         }
         return null;
     }
@@ -113,9 +124,14 @@ public final class RegistryCutter {
             case BLOCK -> resolver.decideBlock(id);
             case ITEM -> resolver.decideItem(id, List.of(id), null);
             case ENTITY -> resolver.decideEntity(id);
+            case ENCHANTMENT -> resolver.decide(ContentType.ENCHANTMENT, id);
             default -> Decision.NONE;
         };
         if (!decision.isCut()) {
+            return null;
+        }
+        if (type == ContentType.ENCHANTMENT && decision.action() != Action.REMOVE) {
+            // Redacted enchantments stay registered as themselves; beforeAdd makes them inert.
             return null;
         }
         boolean placesPlaceholder = type == ContentType.ITEM && forgeRegistry(Registries.BLOCK).getValue(name) instanceof RedactedBlock;
@@ -182,6 +198,7 @@ public final class RegistryCutter {
                 decision = resolver.decideItem(id, placedBlocks, spawnedEntityId(value));
             }
             case ENTITY -> decision = resolver.decideEntity(id);
+            case ENCHANTMENT -> decision = resolver.decide(ContentType.ENCHANTMENT, id);
             default -> decision = Decision.NONE;
         }
 
@@ -202,6 +219,17 @@ public final class RegistryCutter {
             }
         }
         if (!decision.isCut()) {
+            return null;
+        }
+        if (type == ContentType.ENCHANTMENT && decision.action() == Action.REDACT) {
+            // Every enchantment is its mod's own class, and mods read their own enchantments directly, so the object
+            // stays. It does nothing, because the game can't see it on any item (see CutEnchantments).
+            decision = new Decision(Action.REDACT, decision.rule(), decision.matched(),
+                    (decision.note() == null ? "" : decision.note() + "; ") + "stays registered, does nothing");
+            record(core, type, id, modId, decision);
+            if (core.applies()) {
+                CutEnchantments.markInert((Enchantment) value);
+            }
             return null;
         }
         if (decision.action() == Action.REDACT && name.getNamespace().equals("minecraft")) {
@@ -231,6 +259,7 @@ public final class RegistryCutter {
         }
         Object replacement = placeholder(type, name, value);
         forgetRefused(value, replacement);
+        standIns.put(value, replacement);
         return new Cut(false, replacement);
     }
 
@@ -291,6 +320,23 @@ public final class RegistryCutter {
         ghosts.put(key(type, name.toString()), ghost);
     }
 
+    /**
+     * What Forge's delegate lookup should find for an object that was refused, or null. Mods that build their content
+     * themselves keep the original in a static field and go on using it (AE2 sets render layers on its blocks and
+     * builds stacks of its items), and Forge throws "No delegate exists for value" for anything unregistered. A
+     * redacted original resolves to its placeholder, a removed block or item to the shared {@code scalpel:removed}.
+     */
+    public static Object standInFor(Object value) {
+        Object standIn = standIns.get(value);
+        if (standIn != null || !refused.containsKey(value)) {
+            return standIn;
+        }
+        if (value instanceof Block) {
+            return RemovedItem.blockOrNull();
+        }
+        return value instanceof Item ? RemovedItem.getOrNull() : null;
+    }
+
     /** The ghost for a removed id, or null. Called by {@code RegistryObject#get()} when the entry is missing. */
     public static Object ghostFor(ResourceLocation registry, ResourceLocation name) {
         if (ghosts.isEmpty()) {
@@ -308,30 +354,40 @@ public final class RegistryCutter {
         return ghost;
     }
 
+    /** True if a rule took this enchantment out of the registry. */
+    public static boolean isRemovedEnchantment(ResourceLocation name) {
+        return ghosts.containsKey(key(ContentType.ENCHANTMENT, name.toString()));
+    }
+
     /** True for entity types Scalpel created as placeholders. */
     public static boolean isPlaceholderEntityType(Object type) {
         return placeholderEntityTypes.contains(type);
     }
 
     /** The id an item stands for: its original id for placeholders and ghosts, else its registry key. */
-    public static String itemId(net.minecraft.world.item.Item item) {
+    public static String itemId(Item item) {
         String id = idOf(Registries.ITEM, item);
         return id == null ? "minecraft:air" : id;
     }
 
     /** True for items that were cut: placeholders, ghosts, refused originals and redacted vanilla items. */
-    public static boolean isCutItem(net.minecraft.world.item.Item item) {
+    public static boolean isCutItem(Item item) {
         String id = itemId(item);
         return id.equals(RemovedItem.ID) || Scalpel.core().resolver().isCut(ContentType.ITEM, id);
     }
 
     /** True for items a {@code hide} rule matched. They are not cut: recipes, loot and tags keep them. */
-    public static boolean isHiddenItem(net.minecraft.world.item.Item item) {
+    public static boolean isHiddenItem(Item item) {
         return Scalpel.core().resolver().isHidden(ContentType.ITEM, itemId(item));
     }
 
+    /** True for stacks left out of recipe viewers and creative tabs: their item, or a book with only cut enchantments. */
+    public static boolean isUnlisted(ItemStack stack) {
+        return isUnlisted(stack.getItem()) || CutEnchantments.isUnlistedBook(stack);
+    }
+
     /** True for items left out of recipe viewers and creative tabs: cut or hidden, and not in a dry run. */
-    public static boolean isUnlisted(net.minecraft.world.item.Item item) {
+    public static boolean isUnlisted(Item item) {
         return Scalpel.core().applies() && (isCutItem(item) || isHiddenItem(item));
     }
 
@@ -360,6 +416,7 @@ public final class RegistryCutter {
                 RedactedBlock block = redactedBlockFor(name, original);
                 yield block != null ? new RedactedBlockItem(block, name) : new RedactedItem(name);
             }
+            case ENCHANTMENT -> new RemovedEnchantment(name);
             case ENTITY -> {
                 EntityType<RedactedEntity> placeholder = RedactedEntity.createType(name);
                 placeholderEntityTypes.add(placeholder);
@@ -371,8 +428,12 @@ public final class RegistryCutter {
 
     /** The placeholder block a redacted item should place: its own block's, or the one with the same id. */
     private static RedactedBlock redactedBlockFor(ResourceLocation name, Object original) {
-        if (original instanceof BlockItem blockItem && blockItem.getBlock() instanceof RedactedBlock block) {
-            return block;
+        if (original instanceof BlockItem blockItem) {
+            Object placed = ((BlockItemAccessor) blockItem).scalpel$block();
+            Object standIn = standIns.get(placed);
+            if ((standIn != null ? standIn : placed) instanceof RedactedBlock block) {
+                return block;
+            }
         }
         Block sameId = forgeRegistry(Registries.BLOCK).getValue(name);
         return sameId instanceof RedactedBlock block ? block : null;
@@ -401,7 +462,8 @@ public final class RegistryCutter {
             return List.of();
         }
         List<String> ids = new ArrayList<>(2);
-        addBlockId(ids, blockItem.getBlock());
+        // The field, not getBlock(): that asks Forge for the block's delegate, which a refused block doesn't have.
+        addBlockId(ids, ((BlockItemAccessor) blockItem).scalpel$block());
         if (value instanceof StandingAndWallBlockItem wall) {
             addBlockId(ids, ((StandingAndWallBlockItemAccessor) wall).scalpel$wallBlock());
         }

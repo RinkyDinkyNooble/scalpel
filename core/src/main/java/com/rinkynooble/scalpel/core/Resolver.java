@@ -17,7 +17,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * and the data filters can follow.
  *
  * <p>Precedence: keep, then hide, then redact, then remove. Then protection, then the vanilla guard
- * ({@code remove} on a {@code minecraft:} id becomes {@code redact} unless allowed). Hiding changes nothing but
+ * ({@code remove} on a {@code minecraft:} id becomes {@code redact} unless allowed, and always for an enchantment).
+ * Hiding changes nothing but
  * the lists a player sees, so only the hard protection applies to it.
  *
  * <p>Hidden ids are kept apart from cut ones: every data filter reads the cut ids, and hidden content must keep
@@ -95,6 +96,10 @@ public final class Resolver {
         }
         if (level == Protection.Level.SOFT && settings.protectCriticalIds()) {
             return new Decision(Action.PROTECTED, rule, matched, join(note, "protected, see protectCriticalIds"));
+        }
+        if (verb == Verb.REMOVE && type == ContentType.ENCHANTMENT && id.startsWith("minecraft:")) {
+            // Forge's object holders for vanilla's fields refuse an enchantment that isn't registered, at any setting.
+            return new Decision(Action.REDACT, rule, matched, join(note, "vanilla enchantments are redacted, not removed"));
         }
         if (verb == Verb.REMOVE && id.startsWith("minecraft:") && !settings.allowRemovingVanilla()) {
             return new Decision(Action.REDACT, rule, matched, join(note, "vanilla ids are redacted, not removed, see allowRemovingVanilla"));
@@ -228,13 +233,23 @@ public final class Resolver {
         return Collections.unmodifiableSet(cut.get(type).keySet());
     }
 
-    /** True if any registry type has {@code id} cut. Data filters use this for recipes, loot and advancements. */
+    /**
+     * True if {@code id} is cut in a way data files can't refer to. Data filters use this for recipes, loot and
+     * advancements. A redacted enchantment doesn't count: it stays registered, so files that name it still load, and
+     * a loot condition that asks for it just never passes.
+     */
     public boolean isCutAnywhere(String id) {
-        for (Map<String, Decision> map : cut.values()) {
-            if (map.containsKey(id)) {
+        for (Map.Entry<ContentType, Map<String, Decision>> map : cut.entrySet()) {
+            if (map.getKey() != ContentType.ENCHANTMENT && map.getValue().containsKey(id)) {
                 return true;
             }
         }
-        return false;
+        return isRemovedEnchantment(id);
+    }
+
+    /** True if {@code id} is an enchantment that a rule took out of the registry. */
+    public boolean isRemovedEnchantment(String id) {
+        Decision decision = cutState(ContentType.ENCHANTMENT, id);
+        return decision != null && decision.action() == Action.REMOVE;
     }
 }

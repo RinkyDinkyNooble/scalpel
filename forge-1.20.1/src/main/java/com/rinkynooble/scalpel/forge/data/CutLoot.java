@@ -31,6 +31,7 @@ import java.util.function.Supplier;
  * It is listed in {@code forge:global_loot_modifiers} and moved to the end of Forge's list after every load, so it
  * sees what the other global loot modifiers added. LootJS is not one: it applies its actions after
  * {@code ForgeHooks.modifyLoot} has run every modifier, so what a LootJS script adds is not checked.
+ * It also takes cut enchantments off whatever drops, and an enchanted book left with none is dropped.
  */
 public final class CutLoot extends LootModifier {
     public static final ResourceLocation ID = new ResourceLocation(Scalpel.MOD_ID, "strip_cut_items");
@@ -66,11 +67,23 @@ public final class CutLoot extends LootModifier {
         if (!core.applies()) {
             return generatedLoot;
         }
+        String table = String.valueOf(context.getQueriedLootTableId());
         generatedLoot.removeIf(stack -> {
-            if (stack.isEmpty() || !RegistryCutter.isCutItem(stack.getItem())) {
+            if (stack.isEmpty()) {
                 return false;
             }
-            String table = String.valueOf(context.getQueriedLootTableId());
+            for (String enchantment : CutEnchantments.strip(stack)) {
+                if (reported.add(table + "|" + enchantment)) {
+                    DataFilter.change(core, "generated loot enchantment removed", enchantment, "made by a loot function or modifier in " + table);
+                    core.writeReport();
+                }
+            }
+            if (CutEnchantments.isEmptyBook(stack)) {
+                return true;
+            }
+            if (!RegistryCutter.isCutItem(stack.getItem())) {
+                return false;
+            }
             String id = RegistryCutter.itemId(stack.getItem());
             if (reported.add(table + "|" + id)) {
                 DataFilter.change(core, "generated loot removed", id, "made by a loot function or modifier in " + table);

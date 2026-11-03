@@ -55,7 +55,7 @@ import java.util.concurrent.CompletableFuture;
  */
 public final class ScalpelCommand {
     private static final int CHAT_LINES = 10;
-    private static final List<String> TYPE_WORDS = List.of("item", "block", "entity", "any", "recipe", "loot", "advancement", "tag");
+    private static final List<String> TYPE_WORDS = List.of("item", "block", "entity", "enchantment", "any", "recipe", "loot", "advancement", "tag");
     /** Data folders scanned by {@code find}. Worldgen and Forge's modifiers are under these prefixes. */
     private static final List<String> FIND_FOLDERS = List.of("recipes", "loot_tables", "advancements", "tags", "loot_modifiers", "worldgen", "forge");
 
@@ -194,6 +194,7 @@ public final class ScalpelCommand {
             case ITEM -> BuiltInRegistries.ITEM.containsKey(id);
             case BLOCK -> BuiltInRegistries.BLOCK.containsKey(id);
             case ENTITY -> BuiltInRegistries.ENTITY_TYPE.containsKey(id);
+            case ENCHANTMENT -> BuiltInRegistries.ENCHANTMENT.containsKey(id);
             default -> false;
         };
     }

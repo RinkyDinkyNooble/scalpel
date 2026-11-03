@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.0 (2026-11-02)
+
+- New `enchantment` rule type. `redact enchantment` keeps the enchantment registered but makes it do nothing: items read it as level 0, the enchanting table, loot and trades stop offering it, and its tooltip line says "Redacted". `remove enchantment` takes it out of the registry, and loot tables, advancements and tags that name it are cleaned up. `hide enchantment` only takes its enchanted books out of JEI, EMI and the creative tabs. `any` doesn't cover enchantments, so existing rules behave as before.
+- Vanilla enchantments can be redacted but not removed, whatever `allowRemovingVanilla` says.
+- Fixed a crash at startup when cutting a block from a mod that builds its own blocks and items, such as AE2's spatial anchor ("No delegate exists for value"). These mods keep using their original objects, so Forge's lookups now find the placeholder instead of failing.
+- Fixed a crash when a server starts if another mod leaves an immutable list in the villager trades event (`UnsupportedOperationException` in `TabsAndTrades.wrapAll`).
+- Adds one hidden block, `scalpel:removed`, for removed blocks that a mod still holds on to.
+
 ## 0.2.3 (2026-10-16)
 
 - Recipes of other mods' own types, such as TaCZ's gun smith table and Mekanism's machines, are now removed when they need a tag that your cuts left empty. TaCZ's crafting screen crashed on them. This happens in either recipe mode, since Scalpel can only rewrite crafting recipes. The report lists each one, and a `keep recipe` rule keeps it (with a warning).

@@ -13,7 +13,7 @@ public class ScalpelEmiPlugin implements EmiPlugin {
     public void register(EmiRegistry registry) {
         registry.removeEmiStacks(stack -> {
             ItemStack item = stack.getItemStack();
-            return !item.isEmpty() && RegistryCutter.isUnlisted(item.getItem());
+            return !item.isEmpty() && RegistryCutter.isUnlisted(item);
         });
     }
 }

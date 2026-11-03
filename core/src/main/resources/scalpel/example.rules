@@ -13,9 +13,10 @@
 #   If several rules match the same id, the gentler one wins: keep, then hide, then redact, then remove.
 #
 # Types
-#   item, block, entity, any (all three), recipe, loot, advancement, tag
+#   item, block, entity, any (those three), enchantment, recipe, loot, advancement, tag
 #   Recipes, loot tables, advancements and tags can only be kept or removed.
-#   Only items, blocks and entities can be hidden or redacted.
+#   Only items, blocks, entities and enchantments can be hidden or redacted.
+#   A redacted enchantment stays registered but does nothing. A removed one doesn't exist.
 #
 # Patterns
 #   examplemod:ruby            one exact id
@@ -37,6 +38,7 @@
 # remove recipe minecraft:*_boat
 # remove loot   minecraft:chests/*
 # remove tag    forge:ores/tin
+# redact enchantment examplemod:*
 #
 # Try a pattern in game before restarting:   /scalpel test item examplemod:*_eggs
 # Set dryRun = true in scalpel.toml to see what would be cut without cutting anything.
