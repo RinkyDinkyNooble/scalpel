@@ -66,4 +66,28 @@ class RecipeIngredientsTest {
         Predicate<String> logs = "minecraft:logs"::equals;
         assertEquals(Set.of("minecraft:logs"), RecipeIngredients.deadTags(json("{'ingredient':{'tag':'logs'}}"), CUT, logs));
     }
+
+    private static Set<String> deadStrings(String text) {
+        return RecipeIngredients.deadTags(json(text), CUT, EMPTIED, true);
+    }
+
+    @Test
+    void stringIngredients1212() {
+        // 1.21.2+: a tag ingredient is the string "#ns:tag", alternatives an array of ids and tags.
+        assertEquals(Set.of("forge:ores/quartz"), deadStrings("{'type':'mod:press','ingredient':'#forge:ores/quartz','result':{'id':'minecraft:quartz'}}"));
+        assertTrue(deadStrings("{'type':'mod:press','ingredient':'#forge:dusts/quartz','result':{'id':'minecraft:quartz'}}").isEmpty());
+        // One ingredient with a live alternative stays.
+        assertTrue(deadStrings("{'type':'mod:press','ingredient':['#forge:ores/quartz','minecraft:stone']}").isEmpty());
+        assertEquals(Set.of("forge:ores/quartz"), deadStrings("{'type':'mod:press','ingredient':['#forge:ores/quartz','minecraft:copper_ingot']}"));
+        // Under a plural key each value is its own ingredient.
+        assertEquals(Set.of("forge:ingots/copper"), deadStrings("{'type':'mod:mix','ingredients':['#forge:ingots/copper','minecraft:stone']}"));
+        // Conditions name tags but aren't ingredients.
+        assertTrue(deadStrings("{'type':'mod:mix','neoforge:conditions':[],'conditions':['#forge:ingots/copper'],'ingredient':'minecraft:stone'}").isEmpty());
+    }
+
+    @Test
+    void stringValuesOffByDefault() {
+        // Older lines read objects only, so a string tag is not an ingredient there.
+        assertTrue(dead("{'type':'mod:press','ingredient':'#forge:ores/quartz'}").isEmpty());
+    }
 }

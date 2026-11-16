@@ -18,6 +18,10 @@ import java.util.function.Predicate;
  * <p>An array of values under a key that names one ingredient ({@code "ingredient"}, a shaped recipe's key letter) is
  * one ingredient with alternatives. Under a plural key ({@code "ingredients"}, {@code "materials"}) each value is an
  * ingredient of its own.
+ *
+ * <p>From Minecraft 1.21.2 an ingredient is written as a plain string instead: {@code "#ns:tag"} or an item id, and
+ * alternatives as an array of item ids. {@link #deadTags(JsonElement, Predicate, Predicate, boolean)} with
+ * {@code stringValues} reads those too; older lines keep reading objects only.
  */
 public final class RecipeIngredients {
     /** Forge's load conditions name tags too, but they are not ingredients. */
@@ -37,13 +41,31 @@ public final class RecipeIngredients {
      * @param isEmptiedTag takes a tag id without {@code #}
      */
     public static Set<String> deadTags(JsonElement recipe, Predicate<String> isCutItem, Predicate<String> isEmptiedTag) {
+        return deadTags(recipe, isCutItem, isEmptiedTag, false);
+    }
+
+    /**
+     * As {@link #deadTags(JsonElement, Predicate, Predicate)}; with {@code stringValues} (Minecraft 1.21.2 and later) a
+     * string {@code "#ns:tag"} is a tag ingredient, and an array of ids and tags under a singular key is one ingredient
+     * with alternatives.
+     */
+    public static Set<String> deadTags(JsonElement recipe, Predicate<String> isCutItem, Predicate<String> isEmptiedTag,
+                                       boolean stringValues) {
         Set<String> dead = new LinkedHashSet<>();
-        walk(recipe, null, isCutItem, isEmptiedTag, dead);
+        walk(recipe, null, isCutItem, isEmptiedTag, stringValues, dead);
         return dead;
     }
 
-    private static void walk(JsonElement element, String key, Predicate<String> isCutItem, Predicate<String> isEmptiedTag, Set<String> dead) {
+    private static void walk(JsonElement element, String key, Predicate<String> isCutItem, Predicate<String> isEmptiedTag,
+                             boolean stringValues, Set<String> dead) {
         if (key != null && SKIP.contains(key)) {
+            return;
+        }
+        if (stringValues && element.isJsonPrimitive() && element.getAsJsonPrimitive().isString()) {
+            String text = element.getAsString();
+            if (text.startsWith("#") && isEmptiedTag.test(tagId(text))) {
+                dead.add(tagId(text));
+            }
             return;
         }
         if (element.isJsonObject()) {
@@ -56,15 +78,16 @@ public final class RecipeIngredients {
                 return;
             }
             for (Map.Entry<String, JsonElement> entry : object.entrySet()) {
-                walk(entry.getValue(), entry.getKey(), isCutItem, isEmptiedTag, dead);
+                walk(entry.getValue(), entry.getKey(), isCutItem, isEmptiedTag, stringValues, dead);
             }
         } else if (element.isJsonArray()) {
             JsonArray array = element.getAsJsonArray();
             boolean oneIngredient = key == null || !key.endsWith("s");
-            if (oneIngredient && !array.isEmpty() && allValues(array)) {
+            if (oneIngredient && !array.isEmpty() && allValues(array, stringValues)) {
                 Set<String> tags = new LinkedHashSet<>();
                 for (JsonElement child : array) {
-                    Value value = value(child.getAsJsonObject(), isCutItem, isEmptiedTag);
+                    Value value = child.isJsonObject() ? value(child.getAsJsonObject(), isCutItem, isEmptiedTag)
+                            : stringValue(child.getAsString(), isCutItem, isEmptiedTag);
                     if (!value.dead()) {
                         return;
                     }
@@ -76,7 +99,7 @@ public final class RecipeIngredients {
                 return;
             }
             for (JsonElement child : array) {
-                walk(child, null, isCutItem, isEmptiedTag, dead);
+                walk(child, null, isCutItem, isEmptiedTag, stringValues, dead);
             }
         }
     }
@@ -104,8 +127,21 @@ public final class RecipeIngredients {
         return null;
     }
 
-    private static boolean allValues(JsonArray array) {
+    /** A string ingredient value (1.21.2+): {@code "#ns:tag"} or an item id. */
+    private static Value stringValue(String text, Predicate<String> isCutItem, Predicate<String> isEmptiedTag) {
+        if (text.startsWith("#")) {
+            String id = tagId(text);
+            return new Value(isEmptiedTag.test(id), id);
+        }
+        String id = JsonScrub.asId(text);
+        return new Value(id != null && isCutItem.test(id), null);
+    }
+
+    private static boolean allValues(JsonArray array, boolean stringValues) {
         for (JsonElement child : array) {
+            if (stringValues && child.isJsonPrimitive() && child.getAsJsonPrimitive().isString()) {
+                continue;
+            }
             if (!child.isJsonObject() || (string(child.getAsJsonObject(), "item") == null && string(child.getAsJsonObject(), "tag") == null)) {
                 return false;
             }

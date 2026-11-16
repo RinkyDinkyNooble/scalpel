@@ -1,0 +1,16 @@
+{
+  "required": true,
+  "minVersion": "0.8.5",
+  "package": "com.rinkynooble.scalpel.neoforge.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "BlockAsItemMixin",
+    "DeferredHolderMixin",
+    "LootModifierManagerMixin",
+    "MappedRegistryMixin",
+    "RegisterEventMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
