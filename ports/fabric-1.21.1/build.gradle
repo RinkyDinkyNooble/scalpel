@@ -1,0 +1,86 @@
+plugins {
+    id 'fabric-loom' version '1.17.21'
+}
+
+// Shared metadata, plus core's and common/1.21.1's sources compiled straight into this jar.
+apply from: '../../gradle/port.gradle'
+
+base {
+    archivesName = "${mod_id}-fabric-${minecraft_version}"
+}
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+
+loom {
+    accessWidenerPath = file("src/main/resources/scalpel.accesswidener")
+    // Loom 1.17 remaps the mixin annotations in the jar itself, so there is no refmap (see processResources).
+    runs {
+        configureEach {
+            runDir 'run'
+        }
+        client {
+            // ./gradlew runClient -PquickPlay=<world> opens a world in run/saves straight away.
+            if (project.hasProperty('quickPlay')) {
+                programArgs '--quickPlaySingleplayer', project.property('quickPlay')
+            }
+            if (project.hasProperty('quickJoin')) {
+                programArgs '--quickPlayMultiplayer', project.property('quickJoin')
+            }
+        }
+    }
+}
+
+repositories {
+    maven { url = 'https://maven.blamejared.com/' }                 // JEI
+    maven { url = 'https://maven.terraformersmc.com/releases/' }    // EMI
+    maven { url = 'https://api.modrinth.com/maven' }                // Jade
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${minecraft_version}"
+    mappings loom.officialMojangMappings()
+    modImplementation "net.fabricmc:fabric-loader:${fabric_loader_version}"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${fabric_api_version}"
+
+    // Optional integrations: compiled against their APIs, never required at runtime.
+    modCompileOnly "mezz.jei:jei-${minecraft_version}-common-api:${jei_version}"
+    modCompileOnly "mezz.jei:jei-${minecraft_version}-fabric-api:${jei_version}"
+    modCompileOnly "dev.emi:emi-fabric:${emi_version}:api"
+    modCompileOnly "maven.modrinth:jade:${jade_version}"
+
+    // Only for the dev client (cd ports/fabric-1.21.1 && ./gradlew runClient), never shipped.
+    modLocalRuntime "mezz.jei:jei-${minecraft_version}-fabric:${jei_version}"
+    modLocalRuntime "maven.modrinth:jade:${jade_version}"
+    def testMods = rootProject.file('../../research/testenv/mods/fabric-1.21.1')
+    if (testMods.isDirectory()) {
+        modLocalRuntime fileTree(testMods) { include 'TechReborn-*.jar', 'RebornCore-*.jar', 'mezz_config-*.jar' }
+        // Nested libraries of those jars, unpacked: Loom doesn't load nested jars of a file dependency.
+        def nested = rootProject.file('../../research/testenv/mods/fabric-1.21.1-devnested')
+        if (nested.isDirectory()) {
+            modLocalRuntime fileTree(nested) { include '*.jar' }
+        }
+    }
+}
+
+processResources {
+    var replaceProperties = [
+            mod_id               : mod_id,
+            mod_name             : mod_name,
+            mod_license          : mod_license,
+            mod_version          : mod_version,
+            mod_authors          : mod_authors,
+            mod_description      : mod_description,
+            mod_url              : mod_url,
+            mod_issues           : mod_issues,
+            minecraft_range      : fabric_minecraft_range,
+            fabric_loader_min    : fabric_loader_min,
+    ]
+    inputs.properties replaceProperties
+    filesMatching('fabric.mod.json') {
+        expand replaceProperties
+    }
+    // The shared mixin config names a refmap for the ports that have one; here it would only log a missing-file warning.
+    filesMatching('*.mixins.json') {
+        filter { String line -> line.contains('"refmap"') ? null : line }
+    }
+}
