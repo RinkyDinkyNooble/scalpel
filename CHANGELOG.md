@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.4.0 (unreleased)
+## 0.4.0 (2026-11-16)
 
 - Scalpel now runs on Fabric and Quilt too, for Minecraft 1.20 and 1.20.1 (Fabric API or Quilted Fabric API needed). The rules, the report and the commands are the same as on Forge.
 - The Forge jar also runs on NeoForge 1.20.1. Before, it crashed there on first launch while writing `scalpel.toml`.
