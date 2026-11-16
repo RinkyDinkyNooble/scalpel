@@ -6,9 +6,17 @@ Hiding content (removing recipes, hiding it in JEI) still leaves it loaded. Scal
 
 > **Existing worlds can break.** Blocks that are cut from a world that already has them turn into air or placeholders. Add Scalpel and your rules before a world is created, and treat rule changes like adding or removing a mod.
 
-- Minecraft 1.20.1 on Forge 47 or newer (the same jar runs on NeoForge 1.20.1), or Minecraft 1.20 and 1.20.1 on Fabric (with Fabric API) or Quilt (with Quilted Fabric API)
 - Needed on both the client and the server, with the same rules
 - License: 0BSD
+
+| Jar | Minecraft | Loaders |
+|---|---|---|
+| `scalpel-forge-1.20.1` | 1.20.1 | Forge 47 or newer, NeoForge 1.20.1 |
+| `scalpel-fabric-1.20.1` | 1.20, 1.20.1 | Fabric (with Fabric API), Quilt (with Quilted Fabric API) |
+| `scalpel-forge-1.21.1` | 1.21, 1.21.1 | Forge 51 and 52 |
+| `scalpel-neoforge-1.21.1` | 1.21, 1.21.1 | NeoForge 21.0 and 21.1 |
+| `scalpel-fabric-1.21.1` | 1.21, 1.21.1 | Fabric and Quilt, both with Fabric API (there's no Quilted Fabric API for 1.21.1) |
+| `scalpel-neoforge-1.21.11` | 1.21.11 | NeoForge 21.11 (not 1.21.9 or 1.21.10) |
 
 ## Contents
 
@@ -145,7 +153,7 @@ The `ingredientMode` setting and the per-rule option decide this.
 
 Only crafting recipes can be rewritten. A recipe of another mod's own type (a machine or a workbench) that needs a tag the cuts left empty is removed in either mode. The report lists it, and a `keep recipe` rule keeps it.
 
-Recipes that scripts add (KubeJS, CraftTweaker) are also checked. Scalpel can rewrite shaped and shapeless crafting recipes from scripts. Other script recipes are removed.
+Recipes that KubeJS scripts add are also checked. Scalpel can rewrite shaped and shapeless crafting recipes from scripts. Other script recipes are removed. Recipes from CraftTweaker scripts aren't checked yet (see [Limits](#limits)).
 
 ## Vanilla content
 
@@ -171,6 +179,8 @@ keep   enchantment examplemod:fine
 **Remove** takes it out of the registry. Loot functions lose it, a loot condition that asks for it never passes, advancements that mention it are removed, and tags lose it. Other mods' own data files aren't cleaned up, so a mod may log errors about them: Apotheosis logs failed gem files when its enchantments are removed. Vanilla enchantments can only be redacted, whatever `allowRemovingVanilla` says.
 
 **Hide** leaves it working. Enchanted books that have only hidden or cut enchantments are left out of JEI, EMI and the creative tabs.
+
+On Minecraft 1.21 and newer, enchantments are data files instead of code. A redacted enchantment keeps its file, but its effects are emptied and its name becomes "Redacted". A removed enchantment's file is left out when the world loads, and other enchantments, tags, loot tables and advancements that name it are fixed up.
 
 ## Settings
 
@@ -228,10 +238,13 @@ Rules files live in `config/`, so they ship with the pack like any other config.
 
 ## Compatibility
 
-- JEI, EMI and Jade support is built in and optional.
+- JEI, EMI and Jade support is built in and optional, where those mods exist: Forge 1.21.1 has JEI only (EMI and Jade have no Forge builds for it), and 1.21.11 has JEI and Jade (EMI has no 1.21.11 release).
 - On Forge, Scalpel's loot modifier runs last among global loot modifiers, whatever order the data packs list them in. LootJS runs after it (see [Limits](#limits)). Fabric has no global loot modifiers, so Scalpel checks every item a loot table drops.
 - Fabric and Quilt: tested with Fabric API, Quilted Fabric API, Farmer's Delight Refabricated, Applied Energistics 2 and KubeJS.
 - Forge: tested with ModernFix, FerriteCore, Smooth Boot (Reloaded), Saturn, KubeJS, Farmer's Delight, Applied Energistics 2, Apotheosis, and several decoration and mob mods.
+- Minecraft 1.21 and 1.21.1: tested on NeoForge with Farmer's Delight, KubeJS, Applied Energistics 2 and Biomes O' Plenty; on Fabric and Quilt with Farmer's Delight Refabricated, Tech Reborn and Enchantments-Plus; on Forge with Biomes O' Plenty, Macaw's Furniture and Bosses of Mass Destruction.
+- Minecraft 1.21.11 (NeoForge): tested with Biomes O' Plenty, Macaw's Furniture, SecurityCraft and Sophisticated Backpacks.
+- Forge 1.21.1 kicks clients that have many mods with network channels. A big pack may need `general.channelListLimit` raised in `config/forge-common.toml`. This is Forge's limit, not Scalpel's.
 - If ModernFix's dynamic resources option is on, the original mod's blockstate files may log warnings for placeholder blocks. They look right regardless.
 
 ## Limits
@@ -239,6 +252,7 @@ Rules files live in `config/`, so they ship with the pack like any other config.
 - Existing worlds with cut content in them can break.
 - A mod whose code expects its own class for one of its blocks or items crashes when that block or item is redacted, usually with a `ClassCastException` naming the class. This is common in tech mods and rare in decoration mods. The report lists every redacted block and item that was a mod's own class. Hide or keep those instead, or remove all of that mod's content.
 - Recipes that scripts add with another mod's own recipe type aren't checked for tags the cuts left empty.
+- Recipes that CraftTweaker scripts add aren't checked at all yet. A script recipe that uses a cut item stays craftable and shows up in JEI.
 - A mod that holds on to its own block and places it in the world itself, rather than asking for it by id, can still crash when that block is cut. On Fabric every mod holds on to its own content, so `redact` and `hide` are the safer choices there; try `remove` on one mod at a time.
 - An item that already has a cut enchantment keeps its glint. A mod with its own enchanting system can still offer a redacted enchantment, and a mod that reads enchantments straight from an item's data can still see one.
 - Textures of cut blocks and items are still stitched into the texture atlas. Models are skipped.
@@ -251,7 +265,7 @@ Rules files live in `config/`, so they ship with the pack like any other config.
 ./build-all.sh          # or build-all.ps1 on Windows
 ```
 
-This runs the rule engine's tests and builds every port, then copies the jars to `build/release/`. One port at a time: `./gradlew -p ports/fabric-1.20.1 build`.
+This runs the rule engine's tests and builds every port, then copies the jars to `build/release/`. One port at a time: `./gradlew -p ports/fabric-1.20.1 build`. Ports with their own `gradlew` (`fabric-1.21.1`, `forge-1.21.1`) build with it: `ports/forge-1.21.1/gradlew -p ports/forge-1.21.1 build`. The 1.21 ports compile with Java 21, which Gradle downloads if it isn't installed.
 
 - `core/` is the rule engine, with no Minecraft code in it.
 - `common/<minecraft version>/` is the Minecraft code every loader shares for that version.

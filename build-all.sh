@@ -3,6 +3,7 @@
 # Each port is its own Gradle build: ./gradlew -p ports/<loader>-<minecraft> build builds just one.
 set -e
 cd "$(dirname "$0")"
+version=$(sed -n 's/^mod_version=//p' gradle.properties | tr -d '\r')
 ./gradlew build --no-daemon
 rm -rf build/release
 mkdir -p build/release
@@ -15,7 +16,8 @@ for port in ports/*/; do
     else
         ./gradlew -p "$port" build --no-daemon
     fi
-    for jar in "$port"/build/libs/scalpel-*.jar; do
+    # Only this version's jars: build/libs keeps the jars of earlier versions.
+    for jar in "$port"/build/libs/scalpel-*-"$version".jar; do
         case "$jar" in
             *-slim.jar|*-sources.jar|*-dev.jar) ;;
             *) cp "$jar" build/release/ ;;

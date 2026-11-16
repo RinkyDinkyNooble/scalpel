@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.0 (2026-11-16)
+
+- New files for Minecraft 1.21 and 1.21.1: Forge (51 and 52), NeoForge (21.0 and 21.1), and Fabric and Quilt. On Quilt 1.21.1, use Fabric API, since there's no Quilted Fabric API for that version.
+- New file for Minecraft 1.21.11 on NeoForge 21.11. It doesn't run on 1.21.9 or 1.21.10.
+- From 1.21 on, enchantments are data. A redacted enchantment stays, but it does nothing and reads "Redacted". A removed one is left out of the game's data, and the tags, loot tables, advancements and other enchantments that name it are fixed up.
+- Recipe viewers: Forge 1.21.1 has JEI only, because EMI and Jade have no Forge builds for it. 1.21.11 has JEI and Jade, because EMI has no 1.21.11 release.
+- Fixed: removing an item that an armor trim material or trim pattern is made from no longer stops the world from loading ("Failed to load datapacks"). That trim is left out instead.
+- Fixed: on Fabric, a server with Tech Reborn stopped at startup while Scalpel filtered villager trades.
+- Fixed (Forge and NeoForge 1.20.1): removing blocks or items from a mod that builds them before registering them no longer stops the game at startup ("Some intrusive holders were not registered").
+- Fixed (Forge and NeoForge 1.20.1): a creative tab that lists a cut block from a mod that registers its blocks directly no longer fails to build ("Stack size must be exactly 1").
+
 ## 0.4.0 (2026-11-16)
 
 - Scalpel now runs on Fabric and Quilt too, for Minecraft 1.20 and 1.20.1 (Fabric API or Quilted Fabric API needed). The rules, the report and the commands are the same as on Forge.
