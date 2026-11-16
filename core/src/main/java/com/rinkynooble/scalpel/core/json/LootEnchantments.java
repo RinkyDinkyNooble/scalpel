@@ -69,13 +69,34 @@ public final class LootEnchantments {
                     list.asList().removeIf(entry -> entry.isJsonPrimitive() && hit(entry.getAsString(), isRemoved, hits));
                     return list.isEmpty();
                 }
+                return optionsGone(function, isRemoved, hits);
             }
-            case "minecraft:apply_bonus" -> {
+            case "minecraft:enchant_with_levels" -> {
+                return optionsGone(function, isRemoved, hits);
+            }
+            // 1.21 renamed looting_enchant to enchanted_count_increase, which names its enchantment.
+            case "minecraft:apply_bonus", "minecraft:enchanted_count_increase" -> {
                 String enchantment = stringId(function, "enchantment");
                 return enchantment != null && hit(enchantment, isRemoved, hits);
             }
             default -> {
             }
+        }
+        return false;
+    }
+
+    /**
+     * Since 1.21 the enchanting functions pick from {@code options}: one id, a tag, or a list. A tag is left alone (the
+     * tag filter takes the enchantment out of it); a removed id or a list left empty means nothing to pick from.
+     */
+    private static boolean optionsGone(JsonObject function, Predicate<String> isRemoved, Set<String> hits) {
+        JsonElement options = function.get("options");
+        if (options instanceof JsonArray list && !list.isEmpty()) {
+            list.asList().removeIf(entry -> entry.isJsonPrimitive() && hit(entry.getAsString(), isRemoved, hits));
+            return list.isEmpty();
+        }
+        if (options != null && options.isJsonPrimitive() && !options.getAsString().startsWith("#")) {
+            return hit(options.getAsString(), isRemoved, hits);
         }
         return false;
     }

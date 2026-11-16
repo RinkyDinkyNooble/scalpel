@@ -54,6 +54,32 @@ class LootEnchantmentsTest {
     }
 
     @Test
+    void enchantRandomlyOptionsListKeepsTheOthers() {
+        assertStrips("{\"functions\":[{\"function\":\"minecraft:enchant_randomly\",\"options\":[\"mod:gone\",\"mod:kept\"]}]}",
+                "{\"functions\":[{\"function\":\"minecraft:enchant_randomly\",\"options\":[\"mod:kept\"]}]}", "mod:gone");
+    }
+
+    @Test
+    void enchantRandomlyOptionsOfOnlyTheRemovedOneGoes() {
+        assertStrips("{\"functions\":[{\"function\":\"minecraft:enchant_randomly\",\"options\":\"mod:gone\"}]}",
+                "{\"functions\":[]}", "mod:gone");
+        assertStrips("{\"functions\":[{\"function\":\"minecraft:enchant_with_levels\",\"levels\":30,\"options\":[\"mod:gone\"]}]}",
+                "{\"functions\":[]}", "mod:gone");
+    }
+
+    @Test
+    void enchantRandomlyOptionsTagIsLeftAlone() {
+        String tagged = "{\"functions\":[{\"function\":\"minecraft:enchant_randomly\",\"options\":\"#minecraft:on_random_loot\"}]}";
+        assertStrips(tagged, tagged);
+    }
+
+    @Test
+    void enchantedCountIncreaseGoes() {
+        assertStrips("{\"functions\":[{\"function\":\"minecraft:enchanted_count_increase\",\"enchantment\":\"mod:gone\",\"count\":1}]}",
+                "{\"functions\":[]}", "mod:gone");
+    }
+
+    @Test
     void applyBonusGoes() {
         assertStrips("{\"functions\":[{\"function\":\"minecraft:apply_bonus\",\"enchantment\":\"mod:gone\",\"formula\":\"minecraft:ore_drops\"},{\"function\":\"minecraft:explosion_decay\"}]}",
                 "{\"functions\":[{\"function\":\"minecraft:explosion_decay\"}]}", "mod:gone");

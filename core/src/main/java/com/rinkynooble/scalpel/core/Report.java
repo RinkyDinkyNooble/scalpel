@@ -83,8 +83,10 @@ public final class Report {
      * (worldgen, structures, trades, creative tabs) are kept.
      */
     public void resetData() {
+        // "enchantment ...": fixes to the enchantment registry (data since 1.21), which loads with the world, like worldgen.
         changes.removeIf(c -> !(c.category().startsWith("worldgen") || c.category().startsWith("structure")
-                || c.category().startsWith("trade") || c.category().startsWith("creative tab")));
+                || c.category().startsWith("trade") || c.category().startsWith("creative tab")
+                || c.category().startsWith("enchantment")));
         cascade = List.of();
     }
 

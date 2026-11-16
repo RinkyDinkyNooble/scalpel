@@ -1,0 +1,363 @@
+package com.rinkynooble.scalpel.common.data;
+
+import com.rinkynooble.scalpel.core.Cascade;
+import com.rinkynooble.scalpel.core.ContentType;
+import com.rinkynooble.scalpel.core.Decision;
+import com.rinkynooble.scalpel.core.Resolver;
+import com.rinkynooble.scalpel.core.ScalpelCore;
+import com.rinkynooble.scalpel.core.rules.Rule;
+import com.rinkynooble.scalpel.common.Scalpel;
+import com.rinkynooble.scalpel.common.command.IdSuggestions;
+import com.rinkynooble.scalpel.core.RecipeMode;
+import com.rinkynooble.scalpel.common.mixin.IngredientAccessor;
+import com.rinkynooble.scalpel.common.registry.RegistryCutter;
+import net.minecraft.core.RegistryAccess;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.ReloadableServerResources;
+import net.minecraft.server.packs.resources.PreparableReloadListener;
+import net.minecraft.world.item.DyeColor;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.crafting.Ingredient;
+import net.minecraft.world.item.crafting.Recipe;
+import net.minecraft.world.item.crafting.RecipeHolder;
+import net.minecraft.world.item.crafting.RecipeManager;
+import net.minecraft.world.item.crafting.ShapedRecipe;
+import net.minecraft.world.item.crafting.ShapelessRecipe;
+
+import java.util.ArrayList;
+import java.util.EnumSet;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+/**
+ * Server data load lifecycle: resets data results when a load starts, runs a last pass over the built recipes
+ * (catching recipes that scripts added, which never went through the JSON filter), and writes the report once
+ * tags are bound.
+ */
+public final class ServerData {
+    private ServerData() {
+    }
+
+    /** Called when a data load starts, before any file is read. */
+    public static void onDataLoadStart() {
+        DataFilter.beginDataLoad();
+    }
+
+    /** The recipe manager of the last data load. The first load happens before the server object exists. */
+    private static volatile RecipeManager loadedRecipes;
+
+    /**
+     * The final recipe pass as a reload listener. The port adds it after every other listener of the data load (it
+     * must run after the recipe manager and after scripts such as KubeJS and CraftTweaker change recipes).
+     */
+    public static PreparableReloadListener finalRecipePass(ReloadableServerResources resources, RegistryAccess access) {
+        loadedRecipes = resources.getRecipeManager();
+        return (barrier, manager, prepProfiler, applyProfiler, background, main) ->
+                barrier.wait(null).thenRunAsync(() -> finalRecipePass(resources.getRecipeManager(), access), main);
+    }
+
+    /**
+     * The final recipe pass, run directly by a port that calls it once the whole data load is done (Fabric and Quilt:
+     * their resource loaders may reorder listeners, so a listener can't be sure to run last).
+     */
+    public static void runFinalRecipePass(ReloadableServerResources resources, RegistryAccess access) {
+        loadedRecipes = resources.getRecipeManager();
+        finalRecipePass(resources.getRecipeManager(), access);
+    }
+
+    /** Called when the server is stopping: the report gets its last state. */
+    public static void onServerStopping() {
+        Scalpel.core().writeReport();
+    }
+
+    /** One ingredient that can no longer be filled: the cut item or emptied tag behind it. */
+    private record Dead(int index, String cause, boolean viaTag) {
+    }
+
+    /**
+     * The last word on recipes, run after every recipe (files, scripts, other mods) is built. The file pass already
+     * handled recipes that name a cut item directly. This catches the rest: recipes added by scripts, and recipes
+     * whose ingredient is a tag that the cuts left empty (Forge's own recipes use tags such as forge:string).
+     * Shaped and shapeless crafting recipes can be rewritten here; anything else is dropped.
+     */
+    private static void finalRecipePass(RecipeManager recipes, RegistryAccess access) {
+        ScalpelCore core = Scalpel.core();
+        Resolver resolver = core.resolver();
+        boolean anyCut = !resolver.cutIds(ContentType.ITEM).isEmpty() || !TagFilter.emptiedItemTags().isEmpty();
+        if (!anyCut && !resolver.rules().hasRulesFor(ContentType.RECIPE)) {
+            return;
+        }
+        List<RecipeHolder<?>> kept = new ArrayList<>();
+        int dropped = 0;
+        for (RecipeHolder<?> holder : recipes.getRecipes()) {
+            Recipe<?> recipe = holder.value();
+            String id = holder.id().toString();
+            boolean fromFile = DataFilter.wasScanned(id);
+            Decision rule = resolver.decide(ContentType.RECIPE, id);
+            if (rule.action() == Decision.Action.KEEP) {
+                kept.add(holder);
+                continue;
+            }
+            String reason = null;
+            String detail = null;
+            if (rule.action() == Decision.Action.REMOVE) {
+                if (!fromFile || core.applies()) {
+                    reason = "recipe removed by rule";
+                    detail = rule.rule().location();
+                }
+            } else if (anyCut) {
+                ItemStack result = safeResult(recipe, access);
+                String special = result == null || result.isEmpty() ? cutSpecialProducts(recipe, resolver) : null;
+                if (result != null && !result.isEmpty() && RegistryCutter.isCutItem(result.getItem())) {
+                    if (!fromFile || core.applies()) {
+                        reason = "recipe dropped";
+                        detail = "makes " + RegistryCutter.itemId(result.getItem());
+                    }
+                } else if (special != null) {
+                    // The file pass can't see these (their files name no item), so they're reported here even in a dry run.
+                    reason = "recipe dropped";
+                    detail = "makes " + special + " (a special recipe, matched by its type)";
+                } else {
+                    List<Dead> dead = deadIngredients(recipe);
+                    if (!core.applies() && fromFile) {
+                        dead.removeIf(d -> !d.viaTag());
+                    }
+                    if (!dead.isEmpty()) {
+                        String causes = dead.stream().map(Dead::cause).distinct().collect(Collectors.joining(", "));
+                        if (rewriteWanted(core, dead) && rewrite(recipe, dead, core.applies())) {
+                            DataFilter.change(core, "recipe rewritten", id, "without " + causes);
+                            kept.add(holder);
+                            continue;
+                        }
+                        reason = "recipe dropped";
+                        detail = "needs " + causes;
+                    }
+                }
+            }
+            if (reason == null) {
+                kept.add(holder);
+                continue;
+            }
+            DataFilter.change(core, reason, id, detail + (fromFile ? "" : " (added by a script or mod code)"));
+            ItemStack result = safeResult(recipe, access);
+            if (result != null && !result.isEmpty()) {
+                DataFilter.lostProducers().add(RegistryCutter.itemId(result.getItem()));
+            }
+            dropped++;
+        }
+        if (dropped > 0 && core.applies()) {
+            recipes.replaceRecipes(kept);
+        }
+    }
+
+    /**
+     * What vanilla's special crafting recipes make, by serializer. These report no result (the game works it out from
+     * the grid), so this is the only way to see that one makes cut content. Firework rockets and stars report theirs.
+     */
+    private static final Map<String, List<String>> SPECIAL_PRODUCTS = specialProducts();
+
+    private static Map<String, List<String>> specialProducts() {
+        Map<String, List<String>> products = new HashMap<>();
+        products.put("minecraft:crafting_special_firework_star_fade", List.of("minecraft:firework_star"));
+        products.put("minecraft:crafting_special_suspiciousstew", List.of("minecraft:suspicious_stew"));
+        products.put("minecraft:crafting_special_tippedarrow", List.of("minecraft:tipped_arrow"));
+        products.put("minecraft:crafting_special_mapcloning", List.of("minecraft:filled_map"));
+        products.put("minecraft:crafting_special_bookcloning", List.of("minecraft:written_book"));
+        products.put("minecraft:crafting_special_shielddecoration", List.of("minecraft:shield"));
+        products.put("minecraft:crafting_decorated_pot", List.of("minecraft:decorated_pot"));
+        products.put("minecraft:crafting_special_armordye", List.of("minecraft:leather_helmet", "minecraft:leather_chestplate",
+                "minecraft:leather_leggings", "minecraft:leather_boots", "minecraft:leather_horse_armor"));
+        List<String> banners = new ArrayList<>();
+        List<String> boxes = new ArrayList<>(List.of("minecraft:shulker_box"));
+        for (DyeColor color : DyeColor.values()) {
+            banners.add("minecraft:" + color.getName() + "_banner");
+            boxes.add("minecraft:" + color.getName() + "_shulker_box");
+        }
+        products.put("minecraft:crafting_special_bannerduplicate", banners);
+        products.put("minecraft:crafting_special_shulkerboxcoloring", boxes);
+        return products;
+    }
+
+    /** The products of a special recipe when every one of them is cut, else null. */
+    private static String cutSpecialProducts(Recipe<?> recipe, Resolver resolver) {
+        ResourceLocation serializer = BuiltInRegistries.RECIPE_SERIALIZER.getKey(recipe.getSerializer());
+        List<String> products = serializer == null ? null : SPECIAL_PRODUCTS.get(serializer.toString());
+        if (products == null || !products.stream().allMatch(id -> resolver.isCut(ContentType.ITEM, id))) {
+            return null;
+        }
+        return products.size() == 1 ? products.get(0) : String.join(", ", products);
+    }
+
+    /** Ingredients made only of cut items or tags the cuts emptied. Custom (non-vanilla) ingredients are not inspected. */
+    private static List<Dead> deadIngredients(Recipe<?> recipe) {
+        List<Dead> dead = new ArrayList<>();
+        List<Ingredient> ingredients;
+        try {
+            ingredients = recipe.getIngredients();
+        } catch (RuntimeException e) {
+            return dead;
+        }
+        for (int i = 0; i < ingredients.size(); i++) {
+            Ingredient ingredient = ingredients.get(i);
+            if (ingredient.isEmpty() || !Scalpel.platform().isVanillaIngredient(ingredient)) {
+                continue;
+            }
+            boolean live = false;
+            String cause = null;
+            boolean viaTag = false;
+            for (Ingredient.Value value : ((IngredientAccessor) (Object) ingredient).scalpel$values()) {
+                if (value instanceof Ingredient.ItemValue) {
+                    for (ItemStack stack : value.getItems()) {
+                        if (RegistryCutter.isCutItem(stack.getItem())) {
+                            cause = RegistryCutter.itemId(stack.getItem());
+                        } else {
+                            live = true;
+                        }
+                    }
+                } else if (value instanceof Ingredient.TagValue tagValue) {
+                    String tag = tagValue.tag().location().toString();
+                    if (TagFilter.emptiedItemTags().contains(tag)) {
+                        cause = "#" + tag;
+                        viaTag = true;
+                    } else {
+                        live = true;
+                    }
+                } else {
+                    live = true;
+                }
+            }
+            if (!live && cause != null) {
+                dead.add(new Dead(i, cause, viaTag));
+            }
+        }
+        return dead;
+    }
+
+    /**
+     * Rewrite only when every cut item involved asks for it. For an emptied tag, those are the cut items the tag
+     * lost; a tag emptied by a rule follows the global setting.
+     */
+    private static boolean rewriteWanted(ScalpelCore core, List<Dead> dead) {
+        for (Dead d : dead) {
+            Set<String> items = d.viaTag() ? TagFilter.cutMembers(d.cause().substring(1)) : Set.of(d.cause());
+            if (items.isEmpty() && core.settings().ingredientMode() != RecipeMode.REWRITE) {
+                return false;
+            }
+            for (String item : items) {
+                Decision decision = core.resolver().cutState(ContentType.ITEM, item);
+                RecipeMode mode = decision == null ? core.settings().ingredientMode() : decision.recipeMode(core.settings());
+                if (mode != RecipeMode.REWRITE) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Shaped: the dead slots become blank. Shapeless: the dead ingredients are taken out. Returns false (drop the
+     * recipe) for other recipe types, or when nothing would be left. Only changes the recipe when apply is set.
+     */
+    private static boolean rewrite(Recipe<?> recipe, List<Dead> dead, boolean apply) {
+        List<Ingredient> ingredients = recipe.getIngredients();
+        long left = ingredients.stream().filter(i -> !i.isEmpty()).count() - dead.size();
+        if (left <= 0) {
+            return false;
+        }
+        if (recipe instanceof ShapedRecipe) {
+            if (apply) {
+                for (Dead d : dead) {
+                    ingredients.set(d.index(), Ingredient.EMPTY);
+                }
+            }
+            return true;
+        }
+        if (recipe instanceof ShapelessRecipe) {
+            if (apply) {
+                try {
+                    for (int i = dead.size() - 1; i >= 0; i--) {
+                        ingredients.remove(dead.get(i).index());
+                    }
+                } catch (UnsupportedOperationException e) {
+                    // A recipe built in code with a fixed-size list; nothing was removed, so it is dropped instead.
+                    return false;
+                }
+            }
+            return true;
+        }
+        return false;
+    }
+
+    private static ItemStack safeResult(Recipe<?> recipe, RegistryAccess access) {
+        try {
+            return recipe.getResultItem(access);
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
+    /** Called once the server's data load is complete and its tags are bound (not for tags a client receives). */
+    public static void afterDataLoad(RegistryAccess registryAccess) {
+        ScalpelCore core = Scalpel.core();
+        IdSuggestions.dataChanged();
+        RecipeManager recipes = loadedRecipes;
+        if (recipes != null && core.settings().cascadeDepth() > 0 && !DataFilter.lostProducers().isEmpty()) {
+            core.report().cascade(cascade(core, recipes, registryAccess), core.settings().cascadeDepth());
+        }
+        core.report().evaluated(EnumSet.of(ContentType.RECIPE, ContentType.LOOT, ContentType.ADVANCEMENT, ContentType.TAG));
+        for (Rule rule : core.report().unmatchedRules(core.rules().rules())) {
+            if (rule.types().stream().noneMatch(ContentType::isRegistry) || rule.types().contains(ContentType.ENCHANTMENT)) {
+                core.warn("rule matched nothing: " + rule.canonical() + " (" + rule.location() + ")");
+            }
+        }
+        long changes = core.report().changes().size();
+        core.log().info("Data filtered: " + changes + " changes" + (core.applies() ? "" : " (dry run, nothing applied)")
+                + ". Report: " + core.reportFile());
+        core.writeReport();
+    }
+
+    private static List<Set<String>> cascade(ScalpelCore core, RecipeManager recipes, RegistryAccess access) {
+        List<Cascade.RecipeInfo> infos = new ArrayList<>();
+        for (RecipeHolder<?> holder : recipes.getRecipes()) {
+            Recipe<?> recipe = holder.value();
+            String recipeId = holder.id().toString();
+            ItemStack result = safeResult(recipe, access);
+            if (result == null || result.isEmpty()) {
+                continue;
+            }
+            List<Set<String>> ingredients = new ArrayList<>();
+            try {
+                for (Ingredient ingredient : recipe.getIngredients()) {
+                    if (ingredient.isEmpty()) {
+                        continue;
+                    }
+                    Set<String> ids = new LinkedHashSet<>();
+                    for (ItemStack stack : ingredient.getItems()) {
+                        ids.add(RegistryCutter.itemId(stack.getItem()));
+                    }
+                    ingredients.add(ids);
+                }
+            } catch (RuntimeException e) {
+                ingredients.clear();
+            }
+            Set<String> outputs = new HashSet<>(DataFilter.outputsNamed(recipeId));
+            outputs.add(RegistryCutter.itemId(result.getItem()));
+            infos.add(new Cascade.RecipeInfo(recipeId, outputs, ingredients));
+        }
+        Set<String> lost = new HashSet<>();
+        for (String id : DataFilter.lostProducers()) {
+            ResourceLocation location = ResourceLocation.tryParse(id);
+            if (location != null && BuiltInRegistries.ITEM.containsKey(location)) {
+                lost.add(id);
+            }
+        }
+        Set<String> cut = new HashSet<>(core.resolver().cutIds(ContentType.ITEM));
+        return Cascade.compute(infos, lost, cut, core.settings().cascadeDepth());
+    }
+}

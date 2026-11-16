@@ -1,0 +1,80 @@
+plugins {
+    id 'net.neoforged.moddev' version '2.0.141'
+}
+
+// Shared metadata, plus core's and common/1.21.1's sources compiled straight into this jar.
+apply from: '../../gradle/port.gradle'
+
+base {
+    archivesName = "${mod_id}-neoforge-${minecraft_version}"
+}
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+
+neoForge {
+    version = project.neo_version
+
+    runs {
+        configureEach {
+            gameDirectory = project.file('run')
+            systemProperty 'forge.logging.console.level', 'info'
+        }
+        client {
+            client()
+            // ./gradlew runClient -PquickPlay=<world> opens a world in run/saves straight away.
+            if (project.hasProperty('quickPlay')) {
+                programArguments.addAll '--quickPlaySingleplayer', project.property('quickPlay')
+            }
+            if (project.hasProperty('quickJoin')) {
+                programArguments.addAll '--quickPlayMultiplayer', project.property('quickJoin')
+            }
+        }
+        server {
+            server()
+            programArgument '--nogui'
+        }
+    }
+
+    mods {
+        "${mod_id}" {
+            sourceSet sourceSets.main
+        }
+    }
+}
+
+repositories {
+    maven { url = 'https://maven.blamejared.com/' }         // JEI
+    maven { url = 'https://maven.terraformersmc.com/' }     // EMI
+    maven { url = 'https://api.modrinth.com/maven' }        // Jade
+}
+
+dependencies {
+    // Optional integrations: compiled against their APIs, never required at runtime.
+    compileOnly "mezz.jei:jei-${minecraft_version}-common-api:${jei_version}"
+    compileOnly "mezz.jei:jei-${minecraft_version}-neoforge-api:${jei_version}"
+    compileOnly "dev.emi:emi-neoforge:${emi_version}:api"
+    compileOnly "maven.modrinth:jade:${jade_version}"
+
+    // Only for the dev client, never shipped.
+    runtimeOnly "mezz.jei:jei-${minecraft_version}-neoforge:${jei_version}"
+}
+
+processResources {
+    var replaceProperties = [
+            mod_id                  : mod_id,
+            mod_name                : mod_name,
+            mod_license             : mod_license,
+            mod_version             : mod_version,
+            mod_authors             : mod_authors,
+            mod_description         : mod_description,
+            mod_url                 : mod_url,
+            mod_issues              : mod_issues,
+            minecraft_range         : neoforge_minecraft_range,
+            neo_version_range       : neo_version_range,
+            neo_loader_range        : neo_loader_range,
+    ]
+    inputs.properties replaceProperties
+    filesMatching('META-INF/neoforge.mods.toml') {
+        expand replaceProperties
+    }
+}
