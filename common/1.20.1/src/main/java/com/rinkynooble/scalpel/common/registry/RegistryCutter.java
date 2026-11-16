@@ -135,6 +135,12 @@ public final class RegistryCutter {
             // Built, then swapped in beforeAdd: a block's states and an item's class are only known once it exists.
             return buildRedacted(registryKey, type, name, decision, supplier);
         }
+        if (holdsBuiltObject(registryKey, supplier)) {
+            // The mod built the object already and only hands it back (GlitchCore does on 1.21, case 45 here).
+            // Skipping here would leave its intrusive holder behind and the registry would refuse to freeze;
+            // beforeAdd sees the object and releases it.
+            return null;
+        }
         // The item of a redacted block is never built: its block is already the placeholder, and mods hand the
         // block to the item's constructor cast to their own class (Mekanism's BlockDeferredRegister).
         processed.add(key(type, id));
@@ -445,6 +451,33 @@ public final class RegistryCutter {
     /** Removes the intrusive holder the refused object created, or Forge refuses to freeze the registry. */
     private static void release(ResourceKey<?> registryKey, Object value) {
         intrusiveHolders(registryKey).remove(value);
+    }
+
+    /**
+     * True if the supplier holds (as a captured value or field) an object that is built and waiting to be registered,
+     * that is, one with an unregistered intrusive holder. A supplier that builds its object holds none. Fields that
+     * can't be read count as not holding one.
+     */
+    private static boolean holdsBuiltObject(ResourceKey<?> registryKey, Supplier<?> supplier) {
+        Map<Object, ?> holders = intrusiveHolders(registryKey);
+        if (holders.isEmpty()) {
+            return false;
+        }
+        for (java.lang.reflect.Field field : supplier.getClass().getDeclaredFields()) {
+            if (java.lang.reflect.Modifier.isStatic(field.getModifiers())) {
+                continue;
+            }
+            try {
+                field.setAccessible(true);
+                Object held = field.get(supplier);
+                if (held != null && holders.containsKey(held)) {
+                    return true;
+                }
+            } catch (RuntimeException | IllegalAccessException e) {
+                // Not readable: treated as a supplier that builds its object.
+            }
+        }
+        return false;
     }
 
     /** Objects built for a registry and not registered yet. Empty when the registry keeps none. */
