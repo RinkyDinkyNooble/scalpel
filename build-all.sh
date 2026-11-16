@@ -9,7 +9,12 @@ mkdir -p build/release
 for port in ports/*/; do
     port=${port%/}
     echo "== ${port}"
-    ./gradlew -p "$port" build --no-daemon
+    # A port with its own wrapper (Gradle 9 for ForgeGradle 7) builds with it; the others use the root wrapper.
+    if [ -f "$port/gradlew" ]; then
+        sh "$port/gradlew" -p "$port" build --no-daemon
+    else
+        ./gradlew -p "$port" build --no-daemon
+    fi
     for jar in "$port"/build/libs/scalpel-*.jar; do
         case "$jar" in
             *-slim.jar|*-sources.jar|*-dev.jar) ;;

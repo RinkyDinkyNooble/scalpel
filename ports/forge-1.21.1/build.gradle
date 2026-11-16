@@ -1,0 +1,116 @@
+// Forge 1.21.1 port: ForgeGradle 7 on its own Gradle 9 wrapper (ports/forge-1.21.1/gradlew), since the root wrapper
+// stays on Gradle 8 for ForgeGradle 6. Build: ports/forge-1.21.1/gradlew -p ports/forge-1.21.1 build
+// Forge 51/52 run on Mojang names, so there is no refmap and no reobf step.
+plugins {
+    id 'java'
+    id 'idea'
+    id 'eclipse'
+    id 'net.minecraftforge.gradle' version '7.0.40'
+    id 'net.minecraftforge.jarjar' version '0.2.3'
+}
+
+// Shared metadata, plus core's and common/1.21.1's sources compiled straight into this jar.
+apply from: '../../gradle/port.gradle'
+
+base {
+    archivesName = "${mod_id}-forge-${minecraft_version}"
+}
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+
+minecraft {
+    mappings channel: 'official', version: minecraft_version
+
+    runs {
+        configureEach {
+            workingDir = layout.projectDirectory.dir('run')
+            systemProperty 'forge.logging.console.level', 'info'
+            // A dev run has no jar manifest, so Mixin is told about the configs here.
+            args "--mixin.config=${mod_id}.mixins.json", "--mixin.config=${mod_id}.forge.mixins.json"
+        }
+        register('client') {
+            // ./gradlew runClient -PquickPlay=<world> opens a world in run/saves straight away.
+            if (project.hasProperty('quickPlay')) {
+                args '--quickPlaySingleplayer', project.property('quickPlay')
+            }
+            // ./gradlew runClient -PquickJoin=localhost:26097 joins a server straight away.
+            if (project.hasProperty('quickJoin')) {
+                args '--quickPlayMultiplayer', project.property('quickJoin')
+            }
+        }
+        register('server') {
+            args '--nogui'
+        }
+    }
+}
+
+repositories {
+    minecraft.mavenizer(it)
+    maven fg.forgeMaven
+    maven fg.minecraftLibsMaven
+    maven { url = 'https://maven.blamejared.com/' }         // JEI
+    maven { url = 'https://maven.terraformersmc.com/' }     // EMI
+    maven { url = 'https://api.modrinth.com/maven' }        // Jade
+}
+
+jarJar.register()
+
+dependencies {
+    implementation minecraft.dependency("net.minecraftforge:forge:${minecraft_version}-${forge_version}")
+
+    // MixinExtras: compiled against, on the dev classpath, and nested in the shipped jar ([version,) range).
+    compileOnly "io.github.llamalad7:mixinextras-common:${mixinextras_version}"
+    implementation "io.github.llamalad7:mixinextras-forge:${mixinextras_version}"
+    jarJar "io.github.llamalad7:mixinextras-forge:${mixinextras_version}"
+
+    // Optional integrations: compiled against their APIs, never required at runtime.
+    compileOnly "mezz.jei:jei-${minecraft_version}-common-api:${jei_version}"
+    compileOnly "mezz.jei:jei-${minecraft_version}-forge-api:${jei_version}"
+    compileOnly "dev.emi:emi-neoforge:${emi_version}:api"
+    compileOnly "maven.modrinth:jade:${jade_version}"
+
+    // The dev client's other mods (JEI included) are release jars in run/mods/, copied from
+    // research/testenv/mods/forge-1.21.1/. JEI from Maven on the dev classpath brings its API twice (its Forge jar
+    // and its split modules), which Forge's module layer refuses.
+}
+
+tasks.named('processResources', ProcessResources).configure {
+    var replaceProperties = [
+            minecraft_version_range: forge_minecraft_version_range,
+            forge_version_range    : forge_version_range,
+            loader_version_range   : forge_loader_version_range,
+            mod_id                 : mod_id,
+            mod_name               : mod_name,
+            mod_license            : mod_license,
+            mod_version            : mod_version,
+            mod_authors            : mod_authors,
+            mod_description        : mod_description,
+            mod_url                : mod_url,
+            mod_issues             : mod_issues,
+    ]
+    inputs.properties replaceProperties
+    filesMatching(['META-INF/mods.toml']) {
+        expand replaceProperties
+    }
+}
+
+tasks.named('jar', Jar).configure {
+    archiveClassifier = 'slim'
+    manifest {
+        attributes([
+                'Specification-Title'     : mod_id,
+                'Specification-Vendor'    : mod_authors,
+                'Specification-Version'   : '1',
+                'Implementation-Title'    : project.name,
+                'Implementation-Version'  : project.version,
+                'Implementation-Vendor'   : mod_authors,
+                'MixinConfigs'            : "${mod_id}.mixins.json,${mod_id}.forge.mixins.json",
+        ])
+    }
+}
+
+// The jar-in-jar build (MixinExtras nested) is the one to ship.
+tasks.named('jarJar').configure {
+    archiveClassifier = null
+}
+tasks.named('build').configure { dependsOn 'jarJar' }

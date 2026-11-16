@@ -8,7 +8,9 @@ Remove-Item -Recurse -Force build\release -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force build\release | Out-Null
 foreach ($port in Get-ChildItem -Directory ports) {
     Write-Host "== $($port.Name)"
-    .\gradlew.bat -p $port.FullName build --no-daemon
+    # A port with its own wrapper (Gradle 9 for ForgeGradle 7) builds with it; the others use the root wrapper.
+    $own = Join-Path $port.FullName 'gradlew.bat'
+    if (Test-Path $own) { & $own -p $port.FullName build --no-daemon } else { .\gradlew.bat -p $port.FullName build --no-daemon }
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     Get-ChildItem "$($port.FullName)\build\libs\scalpel-*.jar" |
         Where-Object { $_.Name -notmatch '-(slim|sources|dev)\.jar$' } |
