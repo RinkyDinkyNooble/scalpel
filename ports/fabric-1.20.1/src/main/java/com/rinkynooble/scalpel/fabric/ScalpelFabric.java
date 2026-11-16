@@ -7,6 +7,7 @@ import com.rinkynooble.scalpel.common.data.ServerData;
 import com.rinkynooble.scalpel.common.data.TabsAndTrades;
 import com.rinkynooble.scalpel.core.SettingsFile;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
+import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
@@ -21,6 +22,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.function.IntFunction;
 
 /**
  * Fabric entry point. Registration itself is cut in {@code MappedRegistryMixin}, which runs before any mod's initializer
@@ -57,18 +59,40 @@ public final class ScalpelFabric implements ModInitializer {
         }
         tradesWrapped = true;
         for (Map.Entry<VillagerProfession, Int2ObjectMap<VillagerTrades.ItemListing[]>> profession : VillagerTrades.TRADES.entrySet()) {
-            wrapLevels(profession.getValue(), "villager " + BuiltInRegistries.VILLAGER_PROFESSION.getKey(profession.getKey()));
+            String source = "villager " + BuiltInRegistries.VILLAGER_PROFESSION.getKey(profession.getKey());
+            Int2ObjectMap<VillagerTrades.ItemListing[]> levels = profession.getValue();
+            Int2ObjectMap<VillagerTrades.ItemListing[]> result = wrapLevels(levels, level -> source + " level " + level);
+            if (result != levels) {
+                try {
+                    profession.setValue(result);
+                } catch (UnsupportedOperationException e) {
+                    Scalpel.core().log().warn("Trades of " + source + " are left unfiltered: they are kept in maps that can't be changed.");
+                }
+            }
         }
         Int2ObjectMap<VillagerTrades.ItemListing[]> wanderer = VillagerTrades.WANDERING_TRADER_TRADES;
-        for (Int2ObjectMap.Entry<VillagerTrades.ItemListing[]> level : wanderer.int2ObjectEntrySet()) {
-            String source = level.getIntKey() == 2 ? "wandering trader (rare)" : "wandering trader";
-            level.setValue(wrapped(level.getValue(), source));
+        if (wrapLevels(wanderer, level -> level == 2 ? "wandering trader (rare)" : "wandering trader") != wanderer) {
+            Scalpel.core().log().warn("Wandering trader trades are left unfiltered: they are kept in a map that can't be changed.");
         }
     }
 
-    private static void wrapLevels(Int2ObjectMap<VillagerTrades.ItemListing[]> levels, String source) {
-        for (Int2ObjectMap.Entry<VillagerTrades.ItemListing[]> level : levels.int2ObjectEntrySet()) {
-            level.setValue(wrapped(level.getValue(), source + " level " + level.getIntKey()));
+    /**
+     * Wraps one profession's listings per level, in place with {@code put}: mods put their own map types here, and
+     * entry.setValue isn't supported by all of them (RebornCore adds an {@code Int2ObjectArrayMap}, whose entries are
+     * copies). A map that refuses {@code put} as well is left as it is and a wrapped copy is returned for the caller to
+     * swap in.
+     */
+    private static Int2ObjectMap<VillagerTrades.ItemListing[]> wrapLevels(Int2ObjectMap<VillagerTrades.ItemListing[]> levels,
+                                                                          IntFunction<String> source) {
+        Int2ObjectMap<VillagerTrades.ItemListing[]> wrapped = new Int2ObjectOpenHashMap<>();
+        for (int level : levels.keySet().toIntArray()) {
+            wrapped.put(level, wrapped(levels.get(level), source.apply(level)));
+        }
+        try {
+            levels.putAll(wrapped);
+            return levels;
+        } catch (UnsupportedOperationException e) {
+            return wrapped;
         }
     }
 
