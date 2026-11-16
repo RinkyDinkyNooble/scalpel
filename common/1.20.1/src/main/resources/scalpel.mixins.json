@@ -1,0 +1,34 @@
+{
+  "required": true,
+  "minVersion": "0.8.5",
+  "package": "com.rinkynooble.scalpel.common.mixin",
+  "plugin": "com.rinkynooble.scalpel.common.mixin.ScalpelMixinPlugin",
+  "compatibilityLevel": "JAVA_17",
+  "refmap": "scalpel.refmap.json",
+  "mixins": [
+    "BlockItemAccessor",
+    "CreativeModeTabMixin",
+    "EnchantmentHelperMixin",
+    "EnchantmentMixin",
+    "IngredientAccessor",
+    "MappedRegistryAccessor",
+    "NbtUtilsMixin",
+    "PlayerAdvancementsMixin",
+    "RecipeManagerMixin",
+    "RegistryDataLoaderMixin",
+    "SimpleJsonResourceReloadListenerMixin",
+    "SpawnEggItemAccessor",
+    "StandingAndWallBlockItemAccessor",
+    "StructureTemplateManagerMixin",
+    "StructureTemplateMixin",
+    "TagEntryAccessor",
+    "TagValueAccessor",
+    "TagLoaderMixin"
+  ],
+  "client": [
+    "client.ModelBakeryMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

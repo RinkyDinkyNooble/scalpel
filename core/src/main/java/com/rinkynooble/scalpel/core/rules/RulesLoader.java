@@ -42,7 +42,8 @@ public final class RulesLoader {
         try (Stream<Path> stream = Files.list(folder)) {
             paths = stream
                     .filter(p -> Files.isRegularFile(p) && p.getFileName().toString().endsWith(EXTENSION))
-                    .sorted()
+                    // By name, case-sensitive: the order RuleSet uses for ties, the same on every system.
+                    .sorted(java.util.Comparator.comparing(p -> p.getFileName().toString()))
                     .toList();
         }
         List<RulesFile> files = new ArrayList<>();

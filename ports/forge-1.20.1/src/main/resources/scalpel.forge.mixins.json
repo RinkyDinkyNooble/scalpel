@@ -1,0 +1,19 @@
+{
+  "required": true,
+  "minVersion": "0.8.5",
+  "package": "com.rinkynooble.scalpel.forge.mixin",
+  "compatibilityLevel": "JAVA_17",
+  "refmap": "scalpel.refmap.json",
+  "mixins": [
+    "ForgeEnchantmentHelperMixin",
+    "ForgeRegistryMixin",
+    "ForgeSpawnEggItemAccessor",
+    "LootModifierManagerMixin",
+    "NamespacedWrapperMixin",
+    "RegisterEventMixin",
+    "RegistryObjectMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

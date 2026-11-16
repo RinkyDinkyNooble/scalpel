@@ -40,7 +40,7 @@ Recipes, tags, loot tables, advancements, world generation, structures, creative
 
 ## Good to know
 
-- Minecraft 1.20.1, Forge 47 or newer.
+- Minecraft 1.20.1 on Forge 47 or newer (NeoForge 1.20.1 works too), or Minecraft 1.20 and 1.20.1 on Fabric or Quilt with Fabric API.
 - JEI, EMI and Jade support is built in and optional.
 - <span style="color:#e6a700">Removing content that another mod still looks up can crash that mod. Use `redact` first, and run `/scalpel find <id>` before switching a rule to `remove`.</span>
 

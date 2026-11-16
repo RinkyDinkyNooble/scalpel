@@ -129,11 +129,31 @@ public final class ScalpelCore {
         return !settings.dryRun();
     }
 
-    public void writeReport() {
+    public synchronized void writeReport() {
         try {
             report.write(reportFile(), this);
         } catch (IOException e) {
             log.warn("Could not write " + reportFile() + ": " + e.getMessage());
+        }
+    }
+
+    private static final java.util.concurrent.Executor REPORT_WRITER = java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
+        Thread thread = new Thread(r, "Scalpel report writer");
+        thread.setDaemon(true);
+        return thread;
+    });
+    private final java.util.concurrent.atomic.AtomicBoolean reportPending = new java.util.concurrent.atomic.AtomicBoolean();
+
+    /**
+     * Writes the report on a background thread, for callers on the game's hot paths (loot rolls, trades). Requests
+     * made while one is waiting share it.
+     */
+    public void writeReportLater() {
+        if (reportPending.compareAndSet(false, true)) {
+            REPORT_WRITER.execute(() -> {
+                reportPending.set(false);
+                writeReport();
+            });
         }
     }
 

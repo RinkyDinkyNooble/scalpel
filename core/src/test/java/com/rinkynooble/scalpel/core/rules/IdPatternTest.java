@@ -79,6 +79,15 @@ class IdPatternTest {
         assertNull(IdPattern.parse("/(a|b):c/").namespaceHint());
         assertNull(IdPattern.parse("/a.b:c/").namespaceHint());
         assertNull(IdPattern.parse("/.*:c/").namespaceHint());
+        assertNull(IdPattern.parse("/mod_a:x|mod_b:y/").namespaceHint());
+    }
+
+    @Test
+    void alternationAcrossNamespacesMatchesThroughRuleSet() {
+        Rule rule = RuleParser.parseLine("t.rules", 1, "remove item /mod_a:x|mod_b:y/");
+        RuleSet set = new RuleSet(java.util.List.of(rule));
+        assertEquals(1, set.matching(com.rinkynooble.scalpel.core.ContentType.ITEM, "mod_b:y", false).size());
+        assertEquals(1, set.matching(com.rinkynooble.scalpel.core.ContentType.ITEM, "mod_a:x", false).size());
     }
 
     @Test

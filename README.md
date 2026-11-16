@@ -1,12 +1,12 @@
 # Scalpel
 
-Scalpel is a Forge mod for modpack makers. You write rules listing the items, blocks and entities you don't want, and Scalpel cuts them out while the game loads. Their recipes, tags, loot, advancements, world generation and structure pieces go with them.
+Scalpel is a mod for modpack makers. You write rules listing the items, blocks and entities you don't want, and Scalpel cuts them out while the game loads. Their recipes, tags, loot, advancements, world generation and structure pieces go with them.
 
 Hiding content (removing recipes, hiding it in JEI) still leaves it loaded. Scalpel stops it from loading at all, so a pack can include a big decoration or palette mod and only pay for the parts it keeps. For content that should keep working but stay out of sight, Scalpel can also just hide it.
 
 > **Existing worlds can break.** Blocks that are cut from a world that already has them turn into air or placeholders. Add Scalpel and your rules before a world is created, and treat rule changes like adding or removing a mod.
 
-- Minecraft 1.20.1, Forge 47 or newer
+- Minecraft 1.20.1 on Forge 47 or newer (the same jar runs on NeoForge 1.20.1), or Minecraft 1.20 and 1.20.1 on Fabric (with Fabric API) or Quilt (with Quilted Fabric API)
 - Needed on both the client and the server, with the same rules
 - License: 0BSD
 
@@ -105,7 +105,7 @@ Lines with mistakes are skipped, and each one is listed at the top of the report
 
 ## Remove, redact or hide
 
-**Redact** keeps the id but registers a placeholder under it: a plain block or item with a "redacted document" texture, the name "Redacted" and a tooltip that says which id it replaced. It has no behaviour, no creative tab entry, and it's hidden in JEI and EMI. The only way to get one is `/give`. A redacted block keeps the original's block states (which way it faces, for example), so other mods' code and resource files that read them still work. To copy them, Scalpel creates the original block and replaces it before it's registered. Redacted items are created the same way, except the item of a redacted block. A redacted entity is never created, and the models of redacted content are never loaded. Mods that look up their own content by id still find something, and a mod that built the original itself and holds on to it gets the placeholder when Forge looks it up, so redact rarely crashes anything. The exception is a mod whose code expects one of its own classes: the report lists every redacted block and item that was a mod's own class (see [Limits](#limits)).
+**Redact** keeps the id but registers a placeholder under it: a plain block or item with a "redacted document" texture, the name "Redacted" and a tooltip that says which id it replaced. It has no behaviour, no creative tab entry, and it's hidden in JEI and EMI. The only way to get one is `/give`. A redacted block keeps the original's block states (which way it faces, for example), so other mods' code and resource files that read them still work. To copy them, Scalpel creates the original block and replaces it before it's registered. Redacted items are created the same way, except the item of a redacted block. A redacted entity is never created, and the models of redacted content are never loaded. Mods that look up their own content by id still find something, and a mod that built the original itself and holds on to it gets the placeholder when Forge looks it up (on Fabric, mods always build their content themselves; see [Limits](#limits)), so redact rarely crashes anything. The exception is a mod whose code expects one of its own classes: the report lists every redacted block and item that was a mod's own class (see [Limits](#limits)).
 
 A redacted entity shows up as a floating "Redacted" label. It can't be summoned and isn't saved with the world.
 
@@ -215,7 +215,7 @@ For operators (permission level 2). Suggestions work for every id argument.
 
 ## Multiplayer
 
-Scalpel must be on the server and on every client, with the same version and the same rules files. It checks this when a player joins. If anything differs, Forge refuses the connection before any registry error and names the `scalpel:rules` channel with both versions. The report shows the rules hash for each file, so you can compare client and server.
+Scalpel must be on the server and on every client, with the same version and the same rules files. It checks this when a player joins. If anything differs, the server refuses the connection before any registry error: Forge names the `scalpel:rules` channel with both versions, and on Fabric the disconnect message shows both. The report shows the rules hash for each file, so you can compare client and server.
 
 Rules files live in `config/`, so they ship with the pack like any other config.
 
@@ -229,8 +229,9 @@ Rules files live in `config/`, so they ship with the pack like any other config.
 ## Compatibility
 
 - JEI, EMI and Jade support is built in and optional.
-- Scalpel's loot modifier runs last among global loot modifiers, whatever order the data packs list them in. LootJS runs after it (see [Limits](#limits)).
-- Tested with ModernFix, FerriteCore, Smooth Boot (Reloaded), Saturn, KubeJS, Farmer's Delight, Applied Energistics 2, Apotheosis, and several decoration and mob mods.
+- On Forge, Scalpel's loot modifier runs last among global loot modifiers, whatever order the data packs list them in. LootJS runs after it (see [Limits](#limits)). Fabric has no global loot modifiers, so Scalpel checks every item a loot table drops.
+- Fabric and Quilt: tested with Fabric API, Quilted Fabric API, Farmer's Delight Refabricated, Applied Energistics 2 and KubeJS.
+- Forge: tested with ModernFix, FerriteCore, Smooth Boot (Reloaded), Saturn, KubeJS, Farmer's Delight, Applied Energistics 2, Apotheosis, and several decoration and mob mods.
 - If ModernFix's dynamic resources option is on, the original mod's blockstate files may log warnings for placeholder blocks. They look right regardless.
 
 ## Limits
@@ -238,7 +239,7 @@ Rules files live in `config/`, so they ship with the pack like any other config.
 - Existing worlds with cut content in them can break.
 - A mod whose code expects its own class for one of its blocks or items crashes when that block or item is redacted, usually with a `ClassCastException` naming the class. This is common in tech mods and rare in decoration mods. The report lists every redacted block and item that was a mod's own class. Hide or keep those instead, or remove all of that mod's content.
 - Recipes that scripts add with another mod's own recipe type aren't checked for tags the cuts left empty.
-- A mod that holds on to its own block and places it in the world itself, rather than asking for it by id, can still crash when that block is cut.
+- A mod that holds on to its own block and places it in the world itself, rather than asking for it by id, can still crash when that block is cut. On Fabric every mod holds on to its own content, so `redact` and `hide` are the safer choices there; try `remove` on one mod at a time.
 - An item that already has a cut enchantment keeps its glint. A mod with its own enchanting system can still offer a redacted enchantment, and a mod that reads enchantments straight from an item's data can still see one.
 - Textures of cut blocks and items are still stitched into the texture atlas. Models are skipped.
 - Hiding covers JEI, EMI and the creative tabs. The vanilla recipe book still shows recipes that make a hidden item.
@@ -247,7 +248,11 @@ Rules files live in `config/`, so they ship with the pack like any other config.
 ## Building
 
 ```
-./gradlew build
+./build-all.sh          # or build-all.ps1 on Windows
 ```
 
-The mod jar is `forge-1.20.1/build/libs/scalpel-forge-1.20.1-<version>.jar`. `core/` holds the rule engine with no Minecraft code in it, so another loader or Minecraft version can reuse it as its own folder next to `forge-1.20.1/`.
+This runs the rule engine's tests and builds every port, then copies the jars to `build/release/`. One port at a time: `./gradlew -p ports/fabric-1.20.1 build`.
+
+- `core/` is the rule engine, with no Minecraft code in it.
+- `common/<minecraft version>/` is the Minecraft code every loader shares for that version.
+- `ports/<loader>-<minecraft version>/` is one jar each: the loader's own hooks and metadata.

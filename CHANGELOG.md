@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.4.0 (unreleased)
+
+- Scalpel now runs on Fabric and Quilt too, for Minecraft 1.20 and 1.20.1 (Fabric API or Quilted Fabric API needed). The rules, the report and the commands are the same as on Forge.
+- The Forge jar also runs on NeoForge 1.20.1. Before, it crashed there on first launch while writing `scalpel.toml`.
+- On Fabric, mods build their own blocks and items before registering them. A mod can keep using one that Scalpel removed, so try `remove` on one mod at a time there; `redact` and `hide` are safer.
+- Fixed regex rules that list several mods with `|`, such as `/mod_a:.*|mod_b:.*/`. They only matched the first mod.
+- Rules files now load in the same order on every system (by name, capitals first). The order only matters when two rules with the same verb set different recipe options.
+- Fixed a possible crash while loading data when `ingredientMode = "rewrite"` met a shapeless recipe that a mod builds in code.
+- Fixed a possible crash at server start when a recipe file names an output that isn't a valid id.
+- A dry run no longer adds the "Redacted" line to tooltips.
+- The report is no longer written on the server thread when loot or a trade drops a cut item.
+
 ## 0.3.0 (2026-11-02)
 
 - New `enchantment` rule type. `redact enchantment` keeps the enchantment registered but makes it do nothing: items read it as level 0, the enchanting table, loot and trades stop offering it, and its tooltip line says "Redacted". `remove enchantment` takes it out of the registry, and loot tables, advancements and tags that name it are cleaned up. `hide enchantment` only takes its enchanted books out of JEI, EMI and the creative tabs. `any` doesn't cover enchantments, so existing rules behave as before.

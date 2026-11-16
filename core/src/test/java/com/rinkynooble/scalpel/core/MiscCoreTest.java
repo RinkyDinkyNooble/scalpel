@@ -102,6 +102,14 @@ class MiscCoreTest {
         assertEquals(2, loaded.toRuleSet().rules().size());
         assertEquals(1, loaded.errors().size());
         assertEquals("b.rules:2", loaded.errors().get(0).location());
+
+        // Load order and the tie order between rules use the same (case-sensitive) name order on every system.
+        Files.writeString(folder.resolve("C.rules"), "remove item b:y drop\n");
+        Files.writeString(folder.resolve("d.rules"), "remove item b:y rewrite\n");
+        RulesLoader.Loaded mixed = RulesLoader.load(folder);
+        assertEquals(List.of("C.rules", "a.rules", "b.rules", "d.rules", "example.rules"),
+                mixed.files().stream().map(RulesLoader.RulesFile::name).toList());
+        assertEquals("C.rules", mixed.toRuleSet().matching(ContentType.ITEM, "b:y", false).get(0).file());
     }
 
     @Test

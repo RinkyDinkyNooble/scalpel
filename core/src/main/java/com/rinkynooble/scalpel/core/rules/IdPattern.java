@@ -170,8 +170,14 @@ public abstract sealed class IdPattern permits IdPattern.Exact, IdPattern.Glob, 
             return namespaceHint;
         }
 
-        /** A regex such as {@code ^examplemod:.*_eggs$} only ever matches namespace {@code examplemod}. */
+        /**
+         * A regex such as {@code ^examplemod:.*_eggs$} only ever matches namespace {@code examplemod}. One with an
+         * alternation ({@code a:x|b:y}) can match several, so it gets no hint.
+         */
         private static String hintFor(String body) {
+            if (body.indexOf('|') >= 0) {
+                return null;
+            }
             String start = body.startsWith("^") ? body.substring(1) : body;
             int colon = start.indexOf(':');
             if (colon <= 0) {

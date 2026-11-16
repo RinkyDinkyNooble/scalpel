@@ -1,4 +1,4 @@
-// Root project only holds shared settings. Code lives in core/ and the port folders.
+// The root build holds core/ only. Ports live in ports/<loader>-<minecraft>/ as separate builds.
 
 subprojects {
     group = mod_group_id

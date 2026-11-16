@@ -1,0 +1,30 @@
+// Applied by every port build (ports/<loader>-<minecraft>/build.gradle) right after its plugins block.
+// Loads the shared mod metadata from the repo's gradle.properties (a port's own gradle.properties wins on a clash),
+// and adds core's sources and the shared code of the port's Minecraft line (common_line) to the port's jar.
+
+def repoRoot = rootProject.file('../..')
+def shared = new Properties()
+new File(repoRoot, 'gradle.properties').withInputStream { shared.load(it) }
+shared.each { key, value ->
+    if (!project.hasProperty(key as String)) {
+        project.ext.set(key as String, value)
+    }
+}
+
+group = project.mod_group_id
+version = project.mod_version
+
+def commonLine = project.property('common_line')
+sourceSets.main.java.srcDir new File(repoRoot, 'core/src/main/java')
+sourceSets.main.resources.srcDir new File(repoRoot, 'core/src/main/resources')
+sourceSets.main.java.srcDir new File(repoRoot, "common/${commonLine}/src/main/java")
+sourceSets.main.resources.srcDir new File(repoRoot, "common/${commonLine}/src/main/resources")
+
+repositories {
+    mavenCentral()
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release = 17
+}
