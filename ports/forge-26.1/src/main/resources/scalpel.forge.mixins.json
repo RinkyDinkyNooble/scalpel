@@ -1,0 +1,16 @@
+{
+  "required": true,
+  "minVersion": "0.8.5",
+  "package": "com.rinkynooble.scalpel.forge.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "BlockAsItemMixin",
+    "ForgeRegistryMixin",
+    "LootModifierManagerMixin",
+    "RegisterEventMixin",
+    "RegistryObjectMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

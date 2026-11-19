@@ -1,0 +1,37 @@
+modLoader="javafml"
+loaderVersion="${neo_loader_range}"
+license="${mod_license}"
+issueTrackerURL="${mod_issues}"
+
+[[mods]]
+modId="${mod_id}"
+version="${mod_version}"
+displayName="${mod_name}"
+displayURL="${mod_url}"
+# NeoForge 26.1 reads logoFile; 26.2 reads iconFile (and skips its logoFile deprecation warning when iconFile is set).
+logoFile="scalpel.png"
+logoBlur=false
+iconFile="scalpel.png"
+iconBlur=false
+authors="${mod_authors}"
+description='''${mod_description}'''
+
+[[mixins]]
+config="scalpel.mixins.json"
+
+[[mixins]]
+config="scalpel.neoforge.mixins.json"
+
+[[dependencies.${mod_id}]]
+    modId="neoforge"
+    type="required"
+    versionRange="${neo_version_range}"
+    ordering="NONE"
+    side="BOTH"
+
+[[dependencies.${mod_id}]]
+    modId="minecraft"
+    type="required"
+    versionRange="${minecraft_range}"
+    ordering="NONE"
+    side="BOTH"

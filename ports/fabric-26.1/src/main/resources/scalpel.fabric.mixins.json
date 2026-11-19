@@ -1,0 +1,21 @@
+{
+  "required": true,
+  "minVersion": "0.8.5",
+  "package": "com.rinkynooble.scalpel.fabric.mixin",
+  "compatibilityLevel": "JAVA_25",
+  "mixins": [
+    "BlockAsItemMixin",
+    "BuiltInRegistriesMixin",
+    "CreativeModeTabContentsMixin",
+    "FlowerPotBlockAccessor",
+    "LootTableMixin",
+    "MappedRegistryMixin",
+    "ReloadableServerResourcesMixin"
+  ],
+  "client": [
+    "client.PackRepositoryMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

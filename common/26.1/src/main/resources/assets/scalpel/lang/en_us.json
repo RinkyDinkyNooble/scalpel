@@ -1,0 +1,11 @@
+{
+  "block.scalpel.redacted": "Redacted",
+  "block.scalpel.removed": "Removed",
+  "enchantment.scalpel.redacted": "Redacted",
+  "item.scalpel.redacted": "Redacted",
+  "entity.scalpel.redacted": "Redacted",
+  "tooltip.scalpel.original": "Was %s",
+  "item.scalpel.removed": "Removed",
+  "tooltip.scalpel.removed": "Stands in for removed items",
+  "tooltip.scalpel.redacted_vanilla": "Redacted by Scalpel"
+}
