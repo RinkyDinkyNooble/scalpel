@@ -1,84 +1,18 @@
 # Changelog
 
-## 0.5.0 (2026-11-16)
+Each jar has its own changelog, since each one covers different Minecraft versions and loaders.
 
-- New files for Minecraft 1.21 and 1.21.1: Forge (51 and 52), NeoForge (21.0 and 21.1), and Fabric and Quilt. On Quilt 1.21.1, use Fabric API, since there's no Quilted Fabric API for that version.
-- New file for Minecraft 1.21.11 on NeoForge 21.11. It doesn't run on 1.21.9 or 1.21.10.
-- From 1.21 on, enchantments are data. A redacted enchantment stays, but it does nothing and reads "Redacted". A removed one is left out of the game's data, and the tags, loot tables, advancements and other enchantments that name it are fixed up.
-- Recipe viewers: Forge 1.21.1 has JEI only, because EMI and Jade have no Forge builds for it. 1.21.11 has JEI and Jade, because EMI has no 1.21.11 release.
-- Fixed: removing an item that an armor trim material or trim pattern is made from no longer stops the world from loading ("Failed to load datapacks"). That trim is left out instead.
-- Fixed: on Fabric, a server with Tech Reborn stopped at startup while Scalpel filtered villager trades.
-- Fixed (Forge and NeoForge 1.20.1): removing blocks or items from a mod that builds them before registering them no longer stops the game at startup ("Some intrusive holders were not registered").
-- Fixed (Forge and NeoForge 1.20.1): a creative tab that lists a cut block from a mod that registers its blocks directly no longer fails to build ("Stack size must be exactly 1").
-
-## 0.4.0 (2026-11-16)
-
-- Scalpel now runs on Fabric and Quilt too, for Minecraft 1.20 and 1.20.1 (Fabric API or Quilted Fabric API needed). The rules, the report and the commands are the same as on Forge.
-- The Forge jar also runs on NeoForge 1.20.1. Before, it crashed there on first launch while writing `scalpel.toml`.
-- On Fabric, mods build their own blocks and items before registering them. A mod can keep using one that Scalpel removed, so try `remove` on one mod at a time there; `redact` and `hide` are safer.
-- Fixed regex rules that list several mods with `|`, such as `/mod_a:.*|mod_b:.*/`. They only matched the first mod.
-- Rules files now load in the same order on every system (by name, capitals first). The order only matters when two rules with the same verb set different recipe options.
-- Fixed a possible crash while loading data when `ingredientMode = "rewrite"` met a shapeless recipe that a mod builds in code.
-- Fixed a possible crash at server start when a recipe file names an output that isn't a valid id.
-- A dry run no longer adds the "Redacted" line to tooltips.
-- The report is no longer written on the server thread when loot or a trade drops a cut item.
-
-## 0.3.0 (2026-11-02)
-
-- New `enchantment` rule type. `redact enchantment` keeps the enchantment registered but makes it do nothing: items read it as level 0, the enchanting table, loot and trades stop offering it, and its tooltip line says "Redacted". `remove enchantment` takes it out of the registry, and loot tables, advancements and tags that name it are cleaned up. `hide enchantment` only takes its enchanted books out of JEI, EMI and the creative tabs. `any` doesn't cover enchantments, so existing rules behave as before.
-- Vanilla enchantments can be redacted but not removed, whatever `allowRemovingVanilla` says.
-- Fixed a crash at startup when cutting a block from a mod that builds its own blocks and items, such as AE2's spatial anchor ("No delegate exists for value"). These mods keep using their original objects, so Forge's lookups now find the placeholder instead of failing.
-- Fixed a crash when a server starts if another mod leaves an immutable list in the villager trades event (`UnsupportedOperationException` in `TabsAndTrades.wrapAll`).
-- Adds one hidden block, `scalpel:removed`, for removed blocks that a mod still holds on to.
-
-## 0.2.3 (2026-10-16)
-
-- Recipes of other mods' own types, such as TaCZ's gun smith table and Mekanism's machines, are now removed when they need a tag that your cuts left empty. TaCZ's crafting screen crashed on them. This happens in either recipe mode, since Scalpel can only rewrite crafting recipes. The report lists each one, and a `keep recipe` rule keeps it (with a warning).
-- Redacted blocks now have the same block states as the block they replace, so code and resource files that read those states by name keep working. SecurityCraft's secure redstone interface and ResourcefulLib's highlights for Ad Astra's radio crashed on the placeholder before.
-- Fixed a crash when opening the creative inventory ("The stack count must be 1") after removing a block that a mod adds to its creative tab in code. MCreator mods do this.
-- Fixed a client crash at startup ("No delegate exists for value") after cutting a modded mob that has a spawn egg.
-- The report has a new section for redacted blocks and items that were one of a mod's own classes. That mod's code may expect its own class and crash on the placeholder. If a crash names one of them, hide it instead of redacting it.
-- A creative tab whose icon item is cut now shows its first remaining item instead of a blank button.
-- The report no longer warns that a world "may fail to load" because of content that stays registered, such as redacted blocks or cut vanilla content. The falling anvil damage type and Moonlight's soft fluids set off this warning.
-- "Lost every recipe" in the report now counts every item a recipe makes, not just the first. Farmer's Delight's tree bark was listed there by mistake.
-- Vanilla's special crafting recipes don't say what they make. They're now removed when everything they make is cut: suspicious stew, tipped arrows, map and book copying, shield decoration, decorated pots, armor dyeing, banner copying, shulker box dyeing and fading firework stars.
-- Enchanted books are no longer protected, so cutting them doesn't need `protectCriticalIds = false` anymore.
-
-## 0.2.2 (2026-10-01)
-
-- Removing advancements no longer crashes the server when a mod awards them from code. Many mods (most made with MCreator) look an advancement up by id and pass it on without checking that it exists, so the first time a player earned one that a rule had removed, the server crashed. A missing advancement now does nothing.
-
-## 0.2.1 (2026-09-29)
-
-- Fixed a crash with Lost Cities when cutting `minecraft:blackstone`, `minecraft:bricks` or `minecraft:deepslate`. Lost Cities has building variants with those names, written without a mod id. Scalpel took them for the vanilla blocks and replaced them with air, so Lost Cities crashed when the world loaded.
-- Fixed servers not starting ("Failed to load datapacks") when a cut block has the same id as a vanilla world generation feature, such as `minecraft:nether_sprouts`, `minecraft:glow_lichen` or `minecraft:bamboo`. Biomes list those features by id, and Scalpel replaced the ids with air.
-- In vanilla world generation files, only the blocks a file places now turn into air. Other ids that match a cut block, such as a feature in a biome or a noise in the surface rules, are taken out of their list instead.
-- In another mod's own data, such as Lost Cities buildings and palettes, only full ids like `minecraft:stone` now count as blocks. Scalpel leaves names without a mod id as they are, and lists the ones that match something you cut in the report under "worldgen names left alone".
-
-## 0.2.0 (2026-09-28)
-
-- New `hide` verb. Hidden items, blocks and entities stay in the game and keep working, with their recipes, loot, tags, trades and world generation, but they're left out of JEI, EMI and the creative tabs, including the search tab. When rules overlap, the gentler one wins: `keep`, then `hide`, then `redact`, then `remove`.
-- Hiding a block or an entity also hides the item that places or spawns it. Protected ids can be hidden.
-- The report lists hidden content in its own section, and `/scalpel explain` and `/scalpel test` show it.
-- Dry run no longer hides anything in JEI or EMI.
-- Redacted vanilla items say "Redacted by Scalpel" in their tooltip, so "hidden" only ever means the new verb.
-
-## 0.1.1 (2026-09-27)
-
-- Cutting an item now hides all of its variants in JEI. Before, `redact item minecraft:enchanted_book` left every enchanted book, potion or other NBT variant visible.
-- Cut items no longer come out of loot when a loot function creates them, such as the enchanted books in fishing treasure and chest loot. A new global loot modifier, `scalpel:strip_cut_items`, removes them. It runs after every other global loot modifier, and the report lists each loot table it had to clean.
-- When Scalpel removes another mod's loot modifier because it uses cut content, Forge no longer logs a "Could not decode GlobalLootModifier" warning for it.
-
-## 0.1.0 (2026-09-24)
-
-First version, for Minecraft 1.20.1 and Forge 47.
-
-- Rules files in `config/scalpel/` with `keep`, `redact` and `remove`, for items, blocks, entities, recipes, loot tables, advancements and tags. Patterns can be exact ids, wildcards or regular expressions.
-- Redacted content becomes a placeholder with a shared model. Removed content never registers.
-- Block items, spawn eggs and blocks with the same id as a cut item follow along.
-- Recipes, tags, loot tables, loot modifiers, advancements, world generation, structures, creative tabs, trades, JEI and EMI are cleaned up. Recipes can be dropped or rewritten.
-- Vanilla content is hidden rather than replaced.
-- Dry run mode, a report grouped by mod, warnings for rules that match nothing, and a separate log.
-- `/scalpel find`, `test`, `explain`, `reload` and `report`.
-- Client and server must have the same version and rules to connect.
-- Optional JEI, EMI and Jade support.
+| Jar | Minecraft | Loaders | Changelog |
+|---|---|---|---|
+| `scalpel-forge-1.20.1` | 1.20.1 | Forge, NeoForge | [forge-1.20.1](curseforge/changelogs/forge-1.20.1.md) |
+| `scalpel-fabric-1.20.1` | 1.20, 1.20.1 | Fabric, Quilt | [fabric-1.20.1](curseforge/changelogs/fabric-1.20.1.md) |
+| `scalpel-forge-1.21.1` | 1.21, 1.21.1 | Forge | [forge-1.21.1](curseforge/changelogs/forge-1.21.1.md) |
+| `scalpel-neoforge-1.21.1` | 1.21, 1.21.1 | NeoForge | [neoforge-1.21.1](curseforge/changelogs/neoforge-1.21.1.md) |
+| `scalpel-fabric-1.21.1` | 1.21, 1.21.1 | Fabric, Quilt | [fabric-1.21.1](curseforge/changelogs/fabric-1.21.1.md) |
+| `scalpel-neoforge-1.21.11` | 1.21.11 | NeoForge | [neoforge-1.21.11](curseforge/changelogs/neoforge-1.21.11.md) |
+| `scalpel-neoforge-26.1` | 26.1, 26.1.1, 26.1.2, 26.2 | NeoForge | [neoforge-26.1](curseforge/changelogs/neoforge-26.1.md) |
+| `scalpel-fabric-26.1` | 26.1, 26.1.1, 26.1.2, 26.2 | Fabric, Quilt | [fabric-26.1](curseforge/changelogs/fabric-26.1.md) |
+| `scalpel-forge-26.1` | 26.1, 26.1.1, 26.1.2, 26.2 | Forge | [forge-26.1](curseforge/changelogs/forge-26.1.md) |
+| `scalpel-neoforge-26.3` | 26.3 | NeoForge | [neoforge-26.3](curseforge/changelogs/neoforge-26.3.md) |
+| `scalpel-fabric-26.3` | 26.3 | Fabric, Quilt | [fabric-26.3](curseforge/changelogs/fabric-26.3.md) |
+| `scalpel-forge-26.3` | 26.3 | Forge | [forge-26.3](curseforge/changelogs/forge-26.3.md) |

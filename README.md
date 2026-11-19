@@ -17,6 +17,14 @@ Hiding content (removing recipes, hiding it in JEI) still leaves it loaded. Scal
 | `scalpel-neoforge-1.21.1` | 1.21, 1.21.1 | NeoForge 21.0 and 21.1 |
 | `scalpel-fabric-1.21.1` | 1.21, 1.21.1 | Fabric and Quilt, both with Fabric API (there's no Quilted Fabric API for 1.21.1) |
 | `scalpel-neoforge-1.21.11` | 1.21.11 | NeoForge 21.11 (not 1.21.9 or 1.21.10) |
+| `scalpel-neoforge-26.1` | 26.1, 26.1.1, 26.1.2, 26.2 | NeoForge 26.1 and 26.2 |
+| `scalpel-fabric-26.1` | 26.1, 26.1.1, 26.1.2, 26.2 | Fabric and Quilt, both with Fabric API |
+| `scalpel-forge-26.1` | 26.1, 26.1.1, 26.1.2, 26.2 | Forge 62 to 65 |
+| `scalpel-neoforge-26.3` | 26.3 | NeoForge 26.3 |
+| `scalpel-fabric-26.3` | 26.3 | Fabric and Quilt, both with Fabric API |
+| `scalpel-forge-26.3` | 26.3 | Forge 66 |
+
+Each jar has its own changelog in [`curseforge/changelogs/`](curseforge/changelogs/).
 
 ## Contents
 
@@ -238,12 +246,13 @@ Rules files live in `config/`, so they ship with the pack like any other config.
 
 ## Compatibility
 
-- JEI, EMI and Jade support is built in and optional, where those mods exist: Forge 1.21.1 has JEI only (EMI and Jade have no Forge builds for it), and 1.21.11 has JEI and Jade (EMI has no 1.21.11 release).
+- JEI, EMI and Jade support is built in and optional, where those mods exist: Forge 1.21.1 has JEI only (EMI and Jade have no Forge builds for it), 1.21.11 and the 26.x jars for NeoForge, Fabric and Quilt have JEI and Jade (EMI has no release for them), and Forge 26.x has none (JEI, EMI and Jade have no Forge builds for it).
 - On Forge, Scalpel's loot modifier runs last among global loot modifiers, whatever order the data packs list them in. LootJS runs after it (see [Limits](#limits)). Fabric has no global loot modifiers, so Scalpel checks every item a loot table drops.
 - Fabric and Quilt: tested with Fabric API, Quilted Fabric API, Farmer's Delight Refabricated, Applied Energistics 2 and KubeJS.
 - Forge: tested with ModernFix, FerriteCore, Smooth Boot (Reloaded), Saturn, KubeJS, Farmer's Delight, Applied Energistics 2, Apotheosis, and several decoration and mob mods.
 - Minecraft 1.21 and 1.21.1: tested on NeoForge with Farmer's Delight, KubeJS, Applied Energistics 2 and Biomes O' Plenty; on Fabric and Quilt with Farmer's Delight Refabricated, Tech Reborn and Enchantments-Plus; on Forge with Biomes O' Plenty, Macaw's Furniture and Bosses of Mass Destruction.
 - Minecraft 1.21.11 (NeoForge): tested with Biomes O' Plenty, Macaw's Furniture, SecurityCraft and Sophisticated Backpacks.
+- Minecraft 26.1 to 26.3: tested on NeoForge with Biomes O' Plenty, Macaw's Furniture, SecurityCraft, Sophisticated Backpacks and Applied Energistics 2 (and KubeJS on 26.1.2); on Fabric and Quilt with Farmer's Delight Refabricated, Tech Reborn, Biomes O' Plenty, Macaw's Furniture and Enchantments-Plus; on Forge with Biomes O' Plenty, Macaw's Furniture, Storage Drawers and Living Things. From 26.1, villager trades are data, and Scalpel filters them like other data. From 26.3, recipes, advancements and loot tables name each other, and Scalpel fixes up those references too.
 - Forge 1.21.1 kicks clients that have many mods with network channels. A big pack may need `general.channelListLimit` raised in `config/forge-common.toml`. This is Forge's limit, not Scalpel's.
 - If ModernFix's dynamic resources option is on, the original mod's blockstate files may log warnings for placeholder blocks. They look right regardless.
 

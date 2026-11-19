@@ -40,7 +40,7 @@ Recipes, tags, loot tables, advancements, world generation, structures, creative
 
 ## Good to know
 
-- Minecraft 1.20.1 on Forge and NeoForge, 1.20 and 1.20.1 on Fabric and Quilt, 1.21 and 1.21.1 on Forge, NeoForge, Fabric and Quilt, and 1.21.11 on NeoForge. Fabric and Quilt need Fabric API. Each version and loader has its own file.
+- Minecraft 1.20.1 on Forge and NeoForge, 1.20 and 1.20.1 on Fabric and Quilt, 1.21 and 1.21.1 on Forge, NeoForge, Fabric and Quilt, 1.21.11 on NeoForge, and 26.1 to 26.3 on Forge, NeoForge, Fabric and Quilt. Fabric and Quilt need Fabric API. Each version and loader has its own file.
 - JEI, EMI and Jade support is built in and optional.
 - <span style="color:#e6a700">Removing content that another mod still looks up can crash that mod. Use `redact` first, and run `/scalpel find <id>` before switching a rule to `remove`.</span>
 
